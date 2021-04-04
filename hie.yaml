@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "quailifier-bot:lib"
+
+    - path: "./app/Main.hs"
+      component: "quailifier-bot:exe:quailifier-bot-exe"
+
+    - path: "./app/Paths_quailifier_bot.hs"
+      component: "quailifier-bot:exe:quailifier-bot-exe"
+
+    - path: "./test"
+      component: "quailifier-bot:test:quailifier-bot-test"
