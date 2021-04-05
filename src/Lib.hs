@@ -1,9 +1,9 @@
 {-# LANGUAGE DataKinds #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -12,11 +12,13 @@
 {-# LANGUAGE NoImplicitPrelude #-}
 
 module Lib where
+
 import Control.Applicative (Applicative (pure), (<|>))
 import Control.Concurrent
   ( Chan,
     MVar,
     forkIO,
+    modifyMVar_,
     myThreadId,
     newChan,
     newMVar,
@@ -28,15 +30,16 @@ import Control.Concurrent
     writeList2Chan,
   )
 import Control.Exception (SomeException (SomeException), throwIO)
-import Control.Monad.Cont (forever, replicateM_)
+import Control.Monad (join)
+import Control.Monad.Cont (forever, replicateM, replicateM_)
 import qualified Control.Retry as Retry
 import qualified Data.Aeson as A
 import Data.Aeson.Types (Parser, (.:))
 import Data.Either (Either (Left, Right), either, isLeft)
-import Data.Foldable (Foldable (foldl', length))
+import Data.Foldable (Foldable (foldl', length), traverse_)
 import Data.Maybe (Maybe (Just, Nothing), fromMaybe)
 import Data.Text (Text, pack)
-import Data.Text.IO (putStrLn)
+import Data.Text.IO (putStr, putStrLn)
 import GHC.Generics (Generic)
 import Network.HTTP.Client (HttpException (HttpExceptionRequest))
 import Network.HTTP.Client.Internal (Request (Request))
@@ -102,15 +105,15 @@ import Web.Telegram.Types.Update
         updateId
       ),
   )
-import Prelude (Bool (False, True), Eq, Functor (fmap), IO, Int, Ord (max), Semigroup ((<>)), Show (show), print, ($), (+), (<$>))
+import Prelude (Bool (False, True), Eq, Functor (fmap), IO, Int, Ord (max, (<)), Semigroup ((<>)), Show (show), Traversable (traverse), print, sequence, ($), (+), (-), (.), (<$>))
 
-type Routes = GetUpdates
+type Routes = GetUpdates :<|> WTA.SendMessage
 
 data UpdateOrFallback = RealUpdate Update | Fallback {updateId :: Int} deriving (Eq, Show)
 
 instance A.FromJSON UpdateOrFallback where
   parseJSON value =
-    (RealUpdate <$> (A.parseJSON value :: (Parser Update))) <|> A.withObject "Fallback" (\v -> Fallback <$> (v .: "update_id")) value
+    RealUpdate <$> (A.parseJSON value :: (Parser Update)) <|> A.withObject "Fallback" (\v -> Fallback <$> (v .: "update_id")) value
 
 type GetUpdates =
   Capture "token" Token
@@ -119,7 +122,8 @@ type GetUpdates =
     :> Get '[JSON] (ReqResult [UpdateOrFallback])
 
 getUpdates :: Token -> Polling -> IO (ReqResult [UpdateOrFallback])
-getUpdates =
+sendMessage :: Token -> SMessage -> IO (ReqResult Message)
+getUpdates :<|> sendMessage =
   SC.hoistClient
     (Proxy :: Proxy Routes)
     handleClient
@@ -152,42 +156,69 @@ handleClient clientM = do
                 SC.DecodeFailure _ _ -> pure False
                 _ -> pure True
       )
-      ( \r -> do
-          -- print r
+      ( \r ->
           SC.runClientM clientM clientEnv
       )
 
   either throwIO pure eResponse
 
-mainFn :: IO ()
-mainFn =
+outputQueueHandler :: Chan (Maybe Text) -> IO ()
+outputQueueHandler queue =
+  forever
+    ( do
+        out <- readChan queue
+        case out of
+          Just t -> putStrLn t
+          _ -> pure ()
+    )
+
+outputExecutor :: Chan (IO a) -> IO ()
+outputExecutor queue = forever $ do
+  join (readChan queue)
+  pure ()
+
+mainFn :: Token -> IO b
+mainFn token =
   do
-    let token = ""
-    let maxThreads = 15
-    channel <- newChan :: (IO (Chan UpdateOrFallback))
-    resChannel <- newChan :: (IO (Chan ()))
-    currentOffset <- newMVar Nothing
+    let maxThreads = 100
+    resChannel <- newChan
+    currentOffset <- newMVar $ Just 1
+    threadCount <- newMVar (0 :: Int)
+    forkIO $ outputExecutor resChannel
+    mainLoopSync <- newMVar ()
     forever
       ( do
-          offset <- readMVar currentOffset
-          Ok res <- getUpdates token (Polling {offset = (+ 1) <$> offset, limit = Just maxThreads, allowedUpdates = Nothing, timeout = Just 86399})
-          -- print res
-          let threadCount = length res
-          writeList2Chan channel res
-          replicateM_ threadCount $ forkIO $ threadHandler currentOffset channel resChannel showMsg
-
-          replicateM_ threadCount (readChan resChannel)
-          maxOffset <- readMVar currentOffset
-          -- print maxOffset
-          pure ()
+          () <- takeMVar mainLoopSync
+          count <- readMVar threadCount
+          if count < maxThreads
+            then
+              ( do
+                  offset <- readMVar currentOffset
+                  Ok res <- getUpdates token (Polling {offset = (+ 1) <$> offset, limit = Just maxThreads, allowedUpdates = Nothing, timeout = Just 86399})
+                  print res
+                  traverse_
+                    ( forkIO
+                        . threadHandler
+                          threadCount
+                          currentOffset
+                          resChannel
+                          ( \case
+                              RealUpdate u -> (send token u)
+                              _ -> (pure ())
+                          )
+                    )
+                    res
+            
+              )
+            else pure ()
+          putMVar mainLoopSync ()
       )
   where
-    threadHandler :: MVar (Maybe Int) -> Chan UpdateOrFallback -> Chan () -> (UpdateOrFallback -> IO ()) -> IO ()
-    threadHandler currentOffsetMVar channel resChannel action = do
+    threadHandler :: MVar Int -> MVar (Maybe Int) -> Chan (IO a) -> (UpdateOrFallback -> (IO a)) -> UpdateOrFallback -> IO ()
+    threadHandler counter currentOffsetMVar resChannel action updateOrFb = do
       tid <- myThreadId
       -- putStrLn ("thread № " <> pack (show tid) <> " started")
-
-      updateOrFb <- readChan channel
+      modifyMVar_ counter (pure . (+ 1))
       -- print update
       let currentOffset = case updateOrFb of
             RealUpdate update ->
@@ -209,17 +240,21 @@ mainFn =
       prevOffset <- takeMVar currentOffsetMVar
       -- print $ "prevOffset" <> show prevOffset
       putMVar currentOffsetMVar $ max currentOffset prevOffset
+      writeChan
+        resChannel
+        ( do
+            putStrLn $ "from: " <> pack (show tid)
+            action updateOrFb
+        )
 
-      action updateOrFb
-      -- putStrLn ("thread № " <> pack (show tid) <> " ended")
-      writeChan resChannel ()
+      modifyMVar_ counter (pure . (\v -> v -1))
       pure ()
 
-showMsg :: UpdateOrFallback -> IO ()
+showMsg :: UpdateOrFallback -> Maybe Text
 showMsg (RealUpdate Message {message = Msg {metadata = MMetadata {from}, content = TextM {text}}}) =
-  putStrLn $ showUser from <> ": " <> text
-showMsg (RealUpdate Message {message = Msg {metadata = MMetadata {from}}}) = putStrLn $ showUser from <> " - not supported type - "
-showMsg _ = pure ()
+  pure $ showUser from <> ": " <> text
+showMsg (RealUpdate Message {message = Msg {metadata = MMetadata {from}}}) = pure $ showUser from <> " - not supported type - "
+showMsg _ = Nothing
 
 showUser :: Maybe User -> Text
 showUser user =
@@ -227,26 +262,28 @@ showUser user =
     " - "
     ( do
         user' <- user
-        (("@" <>) <$> username user') <|> pure (firstName user' <> fromMaybe "" (lastName user'))
+        ("@" <>) <$> username user' <|> pure (firstName user' <> fromMaybe "" (lastName user'))
     )
 
--- send :: Token -> Update -> IO ()
--- send token Message {message = Msg {metadata = MMetadata {chat = Chat {chatId}}, content = TextM {text}}} =
---   do
---     sendMessage
---       token
---       ( SMsg
---           { chatId = ChatId chatId,
---             text,
---             disableWebPagePreview = Nothing,
---             parseMode = Nothing,
---             disableNotification = Nothing,
---             replyToMessageId = Nothing,
---             replyMarkup = Nothing
---           }
---       )
---     pure ()
--- send _ _ = pure ()
+send :: Token -> Update -> IO ()
+send token Message {message = Msg {content = TextM {text}}} =
+  do
+    tid <- myThreadId
+    print tid
+    sendMessage
+      token
+      ( SMsg
+          { chatId = ChatId 877072184,
+            text,
+            disableWebPagePreview = Nothing,
+            parseMode = Nothing,
+            disableNotification = Nothing,
+            replyToMessageId = Nothing,
+            replyMarkup = Nothing
+          }
+      )
+    pure ()
+send _ _ = pure ()
 
 -- -- a (SC.DecodeFailure b s) = undefined
 -- -- cc :: SMessage -> ()

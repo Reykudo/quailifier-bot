@@ -50,6 +50,7 @@ extra-deps:
 - servant-client-0.16.0.1@sha256:f970ad4e927530b77f52b99a175c85cfdcd1ef988083d56a1f68c6a3dafe8d51,4376
 - servant-multipart-0.11.6@sha256:1863862e507dd6f672b4c9d2c6d87d4faec19686ced3d828d712ada07536cddb,2655
 - deriving-aeson-0.2.6.1@sha256:bd7930b334afab3eb53dcdd5e1e820ec878917a8215d6f80be05bc485df8e0be,1279
+- env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
 
 # Override default flag values for local packages and extra-deps
 # flags: {}

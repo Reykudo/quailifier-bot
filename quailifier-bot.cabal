@@ -35,11 +35,13 @@ library
     , base
     , bytestring
     , containers
+    , env-extra
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
     , mtl
+    , opaleye
     , optparse-applicative
     , retry
     , servant
@@ -67,11 +69,13 @@ executable quailifier-bot-exe
     , base
     , bytestring
     , containers
+    , env-extra
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
     , mtl
+    , opaleye
     , optparse-applicative
     , quailifier-bot
     , retry
@@ -101,11 +105,13 @@ test-suite quailifier-bot-test
     , base
     , bytestring
     , containers
+    , env-extra
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
     , mtl
+    , opaleye
     , optparse-applicative
     , quailifier-bot
     , retry

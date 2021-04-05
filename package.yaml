@@ -43,7 +43,8 @@ dependencies:
 - http-client-tls
 - retry
 - generic-deriving
-
+- env-extra
+- opaleye
 library:
   source-dirs: src
 
