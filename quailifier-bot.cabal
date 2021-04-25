@@ -25,7 +25,13 @@ source-repository head
 
 library
   exposed-modules:
-      Lib
+      Bot.Models
+      Bot.UpdateHandler
+      Bot.UpdateLoop
+      Config
+      DevelMain
+      Init
+      Logger
   other-modules:
       Paths_quailifier_bot
   hs-source-dirs:
@@ -35,25 +41,49 @@ library
     , base
     , bytestring
     , containers
+    , ekg
+    , ekg-core
     , env-extra
+    , fast-logger
+    , foreign-store
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
+    , katip
+    , microlens
+    , monad-control
+    , monad-logger
+    , monad-metrics
     , mtl
     , opaleye
     , optparse-applicative
+    , persistent
+    , persistent-postgresql
+    , persistent-template
+    , postgresql-simple
+    , product-profunctors
+    , resource-pool
     , retry
+    , safe
+    , safe-exceptions
+    , say
     , servant
     , servant-client
+    , servant-js
     , servant-server
     , servant-swagger
     , swagger2
     , telegram-raw-api
     , telegram-types
     , text
+    , time
     , transformers
+    , unliftio
+    , unordered-containers
     , wai
+    , wai-extra
+    , wai-middleware-metrics
     , warp
   default-language: Haskell2010
 
@@ -69,26 +99,50 @@ executable quailifier-bot-exe
     , base
     , bytestring
     , containers
+    , ekg
+    , ekg-core
     , env-extra
+    , fast-logger
+    , foreign-store
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
+    , katip
+    , microlens
+    , monad-control
+    , monad-logger
+    , monad-metrics
     , mtl
     , opaleye
     , optparse-applicative
+    , persistent
+    , persistent-postgresql
+    , persistent-template
+    , postgresql-simple
+    , product-profunctors
     , quailifier-bot
+    , resource-pool
     , retry
+    , safe
+    , safe-exceptions
+    , say
     , servant
     , servant-client
+    , servant-js
     , servant-server
     , servant-swagger
     , swagger2
     , telegram-raw-api
     , telegram-types
     , text
+    , time
     , transformers
+    , unliftio
+    , unordered-containers
     , wai
+    , wai-extra
+    , wai-middleware-metrics
     , warp
   default-language: Haskell2010
 
@@ -105,25 +159,49 @@ test-suite quailifier-bot-test
     , base
     , bytestring
     , containers
+    , ekg
+    , ekg-core
     , env-extra
+    , fast-logger
+    , foreign-store
     , generic-deriving
     , hashable
     , http-client
     , http-client-tls
+    , katip
+    , microlens
+    , monad-control
+    , monad-logger
+    , monad-metrics
     , mtl
     , opaleye
     , optparse-applicative
+    , persistent
+    , persistent-postgresql
+    , persistent-template
+    , postgresql-simple
+    , product-profunctors
     , quailifier-bot
+    , resource-pool
     , retry
+    , safe
+    , safe-exceptions
+    , say
     , servant
     , servant-client
+    , servant-js
     , servant-server
     , servant-swagger
     , swagger2
     , telegram-raw-api
     , telegram-types
     , text
+    , time
     , transformers
+    , unliftio
+    , unordered-containers
     , wai
+    , wai-extra
+    , wai-middleware-metrics
     , warp
   default-language: Haskell2010
