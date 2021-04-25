@@ -16,12 +16,12 @@ import Control.Monad.RWS (MonadReader)
 import Control.Monad.Reader (ReaderT (ReaderT))
 import Data.Int (Int64)
 import qualified Data.Text as T
-import Database.Persist (BaseBackend, Entity (entityKey), PersistEntity (PersistEntityBackend), PersistEntityBackend, PersistQueryRead (selectFirst), PersistQueryWrite (updateWhere), PersistStoreWrite (insert), PersistUniqueRead (getBy), insertEntity, (==.))
+import Database.Persist (BaseBackend, Entity (..), PersistEntity (PersistEntityBackend), PersistEntityBackend, PersistQueryRead (selectFirst), PersistQueryWrite (updateWhere), PersistStoreWrite (insert, update, updateGet), PersistUniqueRead (getBy), insertEntity, (=.), (==.))
 import Database.Persist.Postgresql (SqlBackend, SqlPersistT, fromSqlKey, transactionSave)
 import qualified Web.Telegram.Types as TT
 import Web.Telegram.Types.Update
 
-data Note = Note {userTgId :: Int, chatTgId :: Int, count :: Int}
+data Note = Note {userTgId :: Int64, chatTgId :: Int64, count :: Int}
 
 getOrCreate :: (PersistStoreWrite backend, PersistEntity e, MonadIO m, PersistEntityBackend e ~ BaseBackend backend) => ReaderT backend m (Maybe (Entity e)) -> e -> ReaderT backend m (Entity e)
 getOrCreate byFieldVal fbEntity =
@@ -38,18 +38,21 @@ createNote p = do
   let Note {userTgId, chatTgId, count} = p
   MDLS.runDb
     ( do
-        
         user <- getOrCreate (getBy $ MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId)
         chat <- getOrCreate (getBy $ MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId)
-        rating <-
-          getOrCreate
-            (getBy $ MDLS.UniqueRating (entityKey user) (entityKey chat))
-            ( MDLS.Rating
-                { MDLS.ratingCount = count,
-                  MDLS.ratingUser = entityKey user,
-                  MDLS.ratingChat = entityKey chat
-                }
-            )
+        ratingEntity <- getBy $ MDLS.UniqueRating (entityKey user) (entityKey chat)
+        case ratingEntity of
+          Nothing ->
+            do
+              insertEntity
+                ( MDLS.Rating
+                    { MDLS.ratingCount = count,
+                      MDLS.ratingUser = entityKey user,
+                      MDLS.ratingChat = entityKey chat
+                    }
+                )
+              pure ()
+          Just (Entity key MDLS.Rating {ratingCount = currentCount}) -> update key [MDLS.RatingCount =. currentCount + count]
         pure ()
     )
 
@@ -70,7 +73,7 @@ updateHandler update =
                     },
                 TT.content = TT.TextM {TT.text = text}
               }
-        } -> createNote (Note {userTgId =  userId, chatTgId = userId, count = T.length text})
+        } -> createNote (Note {userTgId = userId, chatTgId = chatId, count = T.length text})
       _ -> pure 0
     pure ()
 

@@ -40,7 +40,6 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-  - telegram-raw-api-0.3.0@sha256:06498f1f8c8ede71bc8e0656e7f558b8d1dc77edb501dda7bcca4565e496ce20,2717
   - aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
   - generic-lens-1.2.0.1@sha256:faecffd513340cd570866aa8f3e0e139d3f9240ecd3eb766357cdf47f550004c,6550
   - lens-4.18.1@sha256:c3fc35707ea1034ade56889a658e34dce944b128765d2215075d5787cb4064a0,15981
@@ -55,10 +54,10 @@ extra-deps:
   - monad-metrics-0.2.2.0@sha256:6c4d51d5d237c4085cea56625c3d364f39f6bf54d43b9dfa93e9cf3890e6a511,1914
   - wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
   - ekg-json-0.1.0.6@sha256:e16efc1b09ae7635db3f0535335ee3e8aa666fe4bf3749783f4022020f6ca3b8,1050
-  - telegram-types-0.4.1@sha256:81a6db827ee04ac465196e09c39c0c9b9ab1ea92d557ac560a512d89893c110a,3016
-# - github: Reykudo/telegram-types
-#   commit: 57f4a57817de56d134594554dbf8176902ad366f
-
+  - github: Reykudo/telegram-types
+    commit: 1c62c5ad5390b2eaa12db1bc0f3a525dac3f758f
+  - github: Reykudo/telegram-raw-api
+    commit: 4e2f2e901c215b8cb5e1f91ba377b5930ecac371
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

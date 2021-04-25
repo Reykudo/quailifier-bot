@@ -21,6 +21,7 @@ import Config (Config, configPool)
 import Control.Exception.Safe
 import Control.Monad.Reader (MonadIO, MonadReader, asks, liftIO)
 import Data.Aeson (ToJSON)
+import Data.Int (Int64)
 import Data.Text (Text)
 import Database.Persist (Entity (Entity))
 import Database.Persist.Sql (SqlPersistT, runMigration, runSqlPool)
@@ -40,12 +41,12 @@ share
   ]
   [persistLowerCase|
     User json
-        tgId Int
+        tgId Int64
 
         UniqueUserTgId tgId
         deriving Show Eq 
     Chat json
-        tgId Int
+        tgId Int64
 
         UniqueChatTgId tgId
         deriving Show Eq 

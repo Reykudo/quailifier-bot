@@ -27,6 +27,7 @@ import Data.Aeson.Types (Parser, (.:))
 import Data.Either (Either (Left, Right), either, isLeft)
 import Data.Foldable (Foldable (foldl', length), traverse_)
 import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
+import Data.Int (Int64)
 import Data.Maybe (Maybe (Just, Nothing), fromMaybe)
 import Data.STRef (STRef, newSTRef)
 import Data.Text (Text, pack)
@@ -93,29 +94,15 @@ import Web.Telegram.Types.Update
         PollUpdate,
         PreCheckoutQuery,
         ShippingQuery,
+        Unknown,
         message,
         updateId
       ),
   )
-import Prelude (Bool (False, True), Eq, Functor (fmap), IO, Int, Ord (max, (<)), Semigroup ((<>)), Show (show), Traversable (traverse), flip, print, sequence, undefined, ($), (+), (-), (.), (<$>), fromIntegral)
-import Data.Int (Int64)
+import Prelude (Bool (False, True), Eq, Functor (fmap), IO, Int, Ord (max, (<)), Semigroup ((<>)), Show (show), Traversable (traverse), flip, fromIntegral, print, sequence, undefined, ($), (+), (-), (.), (<$>))
 
-type Routes = GetUpdates
+type Routes = WTA.GetUpdates
 
-data UpdateOrFallback = RealUpdate Update | Fallback {updateId :: Int} deriving (Eq, Show)
-
-instance A.FromJSON UpdateOrFallback where
-  parseJSON value =
-    RealUpdate <$> (A.parseJSON value :: (Parser Update)) <|> A.withObject "Fallback" (\v -> Fallback <$> (v .: "update_id")) value
-
-type GetUpdates =
-  Capture "token" Token
-    :> "getUpdates"
-    :> ReqBody '[JSON] Polling
-    :> Get '[JSON] (ReqResult [UpdateOrFallback])
-
-getUpdates :: Token -> Polling -> IO (ReqResult [UpdateOrFallback])
--- sendMessage :: Token -> SMessage -> IO (ReqResult Message)
 getUpdates =
   SC.hoistClient
     (Proxy :: Proxy Routes)
@@ -172,23 +159,19 @@ handleClient clientM = do
 --       join $ readChan queue
 --     )
 
-getUpdateId :: UpdateOrFallback -> Maybe Int
-getUpdateId updateOrFb = case updateOrFb of
-  RealUpdate update ->
-    ( case update of
-        Message {updateId} -> Just updateId
-        EditedMessage {updateId} -> Just updateId
-        ChannelPost {updateId} -> Just updateId
-        CallbackQuery {updateId} -> Just updateId
-        ChosenInlineResult {updateId} -> Just updateId
-        InlineQuery {updateId} -> Just updateId
-        EditedChannelPost {updateId} -> Just updateId
-        ShippingQuery {updateId} -> Just updateId
-        PreCheckoutQuery {updateId} -> Just updateId
-        PollUpdate {updateId} -> Just updateId
-        _ -> undefined
-    )
-  Fallback {updateId} -> Just updateId
+getUpdateId :: Update -> Maybe Int64
+getUpdateId update = case update of
+  Message {updateId} -> Just updateId
+  EditedMessage {updateId} -> Just updateId
+  ChannelPost {updateId} -> Just updateId
+  CallbackQuery {updateId} -> Just updateId
+  ChosenInlineResult {updateId} -> Just updateId
+  InlineQuery {updateId} -> Just updateId
+  EditedChannelPost {updateId} -> Just updateId
+  ShippingQuery {updateId} -> Just updateId
+  PreCheckoutQuery {updateId} -> Just updateId
+  PollUpdate {updateId} -> Just updateId
+  Unknown {updateId} -> Just updateId
 
 updateLoop :: Config -> (Update -> IO ()) -> IO ()
 updateLoop cfg handle = do
@@ -198,14 +181,12 @@ updateLoop cfg handle = do
   let maxThreads = configTgMaxHandlers cfg
   -- resChannel <- newChan @(Chan ())
   threadsCount <- newChan
-  currentOffset <- newMVar (Nothing @Int)
+  currentOffset <- newMVar (Nothing @Int64)
   -- forkIO $ outputExecutor resChannel
   -- mainLoopSync <- newMVar ()
-  let threadHandler = \updateOrFb ->
+  let threadHandler = \u ->
         ( do
-            case updateOrFb of
-              RealUpdate u -> handle u
-              Fallback f -> pure ()
+            handle u
             writeChan threadsCount ()
         )
 
