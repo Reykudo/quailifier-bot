@@ -103,16 +103,16 @@ packages:
   original:
     hackage: ekg-json-0.1.0.6@sha256:e16efc1b09ae7635db3f0535335ee3e8aa666fe4bf3749783f4022020f6ca3b8,1050
 - completed:
-    size: 16167
-    url: https://github.com/Reykudo/telegram-types/archive/1c62c5ad5390b2eaa12db1bc0f3a525dac3f758f.tar.gz
+    size: 16248
+    url: https://github.com/Reykudo/telegram-types/archive/dea9bb3b928da57615ad74b16636061e55a98ee4.tar.gz
     name: telegram-types
     version: 0.4.1
-    sha256: ffbf89744334f2a9a96264d59d4c32b54350ce9594d374bb280518093cd5863e
+    sha256: 3af692f03548a06c4e8bc93155f0095ffa81bb090053eae6c507fe0221e9ab4d
     pantry-tree:
       size: 2318
-      sha256: 3f82bb8d5efdd2619a4858e050bcdfda6153fc0baf1259f675f39db2732c3827
+      sha256: c1cf241cd156390ee8d6f745926c85f9196a367a2670e1804badfb15ae25fcce
   original:
-    url: https://github.com/Reykudo/telegram-types/archive/1c62c5ad5390b2eaa12db1bc0f3a525dac3f758f.tar.gz
+    url: https://github.com/Reykudo/telegram-types/archive/dea9bb3b928da57615ad74b16636061e55a98ee4.tar.gz
 snapshots:
 - completed:
     size: 491389

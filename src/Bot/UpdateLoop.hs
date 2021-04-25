@@ -9,7 +9,6 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE NoImplicitPrelude #-}
 
 module Bot.UpdateLoop where
 
@@ -30,8 +29,8 @@ import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
 import Data.Int (Int64)
 import Data.Maybe (Maybe (Just, Nothing), fromMaybe)
 import Data.STRef (STRef, newSTRef)
-import Data.Text (Text, pack)
-import Data.Text.IO (putStr, putStrLn)
+import qualified Data.Text as T
+import qualified Data.Text.IO as TIO
 import GHC.Generics (Generic)
 import Network.HTTP.Client (HttpException (HttpExceptionRequest))
 import Network.HTTP.Client.Internal (Request (Request))
@@ -99,10 +98,10 @@ import Web.Telegram.Types.Update
         updateId
       ),
   )
-import Prelude (Bool (False, True), Eq, Functor (fmap), IO, Int, Ord (max, (<)), Semigroup ((<>)), Show (show), Traversable (traverse), flip, fromIntegral, print, sequence, undefined, ($), (+), (-), (.), (<$>))
 
 type Routes = WTA.GetUpdates
 
+getUpdates :: Token -> Polling -> IO (ReqResult [Update])
 getUpdates =
   SC.hoistClient
     (Proxy :: Proxy Routes)
@@ -126,19 +125,17 @@ handleClient clientM = do
     Retry.retrying
       (Retry.limitRetries 999999)
       ( \status response -> do
-          putStrLn $ "status " <> pack (show status)
+          TIO.putStrLn $ "status " <> T.pack (show status)
           case response of
             Right b -> pure False
             Left e -> do
-              putStrLn $ "error ocured " <> pack (show e)
+              TIO.putStrLn $ "error ocured " <> T.pack (show e)
               case e of
                 SC.ConnectionError (SomeException _) -> pure True
                 SC.DecodeFailure _ _ -> pure False
                 _ -> pure True
       )
-      ( \r ->
-          SC.runClientM clientM clientEnv
-      )
+      (const $ SC.runClientM clientM clientEnv)
 
   either throwIO pure eResponse
 

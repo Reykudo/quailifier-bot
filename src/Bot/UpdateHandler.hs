@@ -10,7 +10,7 @@ module Bot.UpdateHandler where
 
 import qualified Bot.Models as MDLS
 import Config (AppT (AppT), Config)
-import Control.Monad.Cont (MonadIO)
+import Control.Monad.Cont (MonadIO (liftIO))
 import Control.Monad.Logger (logDebugNS)
 import Control.Monad.RWS (MonadReader)
 import Control.Monad.Reader (ReaderT (ReaderT))
@@ -31,14 +31,14 @@ getOrCreate byFieldVal fbEntity =
       Just u -> pure u
       Nothing -> insertEntity fbEntity
 
-createNote :: MonadIO m => Note -> AppT m Int64
+createNote :: MonadIO m => Note -> AppT m ()
 createNote p = do
   -- increment "createUser"
   logDebugNS "web" "creating a user"
   let Note {userTgId, chatTgId, count} = p
   MDLS.runDb
     ( do
-        user <- getOrCreate (getBy $ MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId)
+        user <- getOrCreate (getBy $ MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId False)
         chat <- getOrCreate (getBy $ MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId)
         ratingEntity <- getBy $ MDLS.UniqueRating (entityKey user) (entityKey chat)
         case ratingEntity of
@@ -56,7 +56,7 @@ createNote p = do
         pure ()
     )
 
-  pure 0
+  pure ()
 
 --   return $ fromSqlKey newUser
 updateHandler :: MonadIO m => Update -> AppT m ()
@@ -68,14 +68,13 @@ updateHandler update =
             TT.Msg
               { TT.metadata =
                   TT.MMetadata
-                    { TT.from = Just TT.User {TT.userId = userId},
-                      TT.chat = TT.Chat {TT.chatId = chatId}
+                    { TT.from = Just TT.User {TT.userId = userTgId},
+                      TT.chat = TT.Chat {TT.chatId = chatTgId}
                     },
                 TT.content = TT.TextM {TT.text = text}
               }
-        } -> createNote (Note {userTgId = userId, chatTgId = chatId, count = T.length text})
-      _ -> pure 0
-    pure ()
+        } | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
+      _ -> liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text
 -- showMsg (RealUpdate Message {message = Msg {metadata = MMetadata {from}, content = TextM {text}}}) =

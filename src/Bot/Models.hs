@@ -20,7 +20,7 @@ module Bot.Models where
 import Config (Config, configPool)
 import Control.Exception.Safe
 import Control.Monad.Reader (MonadIO, MonadReader, asks, liftIO)
-import Data.Aeson (ToJSON)
+import Data.Aeson (ToJSON, Value (Bool))
 import Data.Int (Int64)
 import Data.Text (Text)
 import Database.Persist (Entity (Entity))
@@ -42,7 +42,7 @@ share
   [persistLowerCase|
     User json
         tgId Int64
-
+        subscribed Bool
         UniqueUserTgId tgId
         deriving Show Eq 
     Chat json
