@@ -1,25 +1,18 @@
-{-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DerivingStrategies #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Config where
 
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
-import Control.Applicative (Alternative)
 import Control.Concurrent (ThreadId)
-import Control.Exception.Safe (MonadCatch, MonadThrow, throwIO)
-import Control.Monad.Except (ExceptT, MonadError, MonadPlus)
+import Control.Exception.Safe (throwIO)
+import Control.Monad.Except (ExceptT, MonadError)
 import Control.Monad.IO.Class
 import Control.Monad.Logger (MonadLogger (..))
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 import Control.Monad.Reader (MonadIO, MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
@@ -35,7 +28,6 @@ import Logger
 import Network.Wai (Middleware)
 import Network.Wai.Handler.Warp (Port)
 import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
-import Options.Applicative (Alternative ((<|>)), empty)
 import Servant.Client (ClientError)
 import Servant.Server.Internal.ServerError
 import System.Environment (lookupEnv)
@@ -51,24 +43,16 @@ import Web.Telegram.API (Token (Token))
 newtype AppT m a = AppT
   { runAppT :: ReaderT Config (ExceptT ClientError m) a
   }
-  deriving newtype
-    ( Applicative,
+  deriving
+    ( Functor,
+      Applicative,
       Monad,
       MonadReader Config,
       MonadError ClientError,
       MonadIO
     )
-  deriving
-    (Functor)
 
 type App = AppT IO
-
-deriving newtype instance MonadThrow App
-
-deriving newtype instance MonadCatch App
-
--- instance Alternative (AppT m) where
---   empty =
 
 -- | The Config for our application is (for now) the 'Environment' we're
 -- running in and a Persistent 'ConnectionPool'.
@@ -174,4 +158,4 @@ envPool Production = 8
 -- | A basic 'ConnectionString' for local/test development. Pass in either
 -- @""@ for 'Development' or @"test"@ for 'Test'.
 connStr :: BS.ByteString -> ConnectionString
-connStr sfx = "host=localhost dbname=mydb" <> sfx <> " user=postgres password=7984652134 port=5432"
+connStr sfx = "host=localhost dbname=mydb" <> sfx <> " user=postgres password=452565 port=5432"
