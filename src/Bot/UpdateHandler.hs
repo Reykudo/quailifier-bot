@@ -8,6 +8,7 @@
 
 module Bot.UpdateHandler where
 
+import Bot.CommandHandler (handleDirectMessage, safeHandleDirectMessage)
 import qualified Bot.Models as MDLS
 import Config (AppT (AppT), Config)
 import Control.Monad.Cont (MonadIO (liftIO))
@@ -16,20 +17,19 @@ import Control.Monad.RWS (MonadReader)
 import Control.Monad.Reader (ReaderT (ReaderT))
 import Data.Int (Int64)
 import qualified Data.Text as T
-import Database.Persist (BaseBackend, Entity (..), PersistEntity (PersistEntityBackend), PersistEntityBackend, PersistQueryRead (selectFirst), PersistQueryWrite (updateWhere), PersistStoreWrite (insert, update, updateGet), PersistUniqueRead (getBy), insertEntity, (=.), (==.))
-import Database.Persist.Postgresql (SqlBackend, SqlPersistT, fromSqlKey, transactionSave)
+import Database.Persist.Postgresql (Entity (entityKey), PersistStoreWrite (repsert), PersistUniqueWrite (upsert, upsertBy), SqlBackend (connBegin), SqlPersistT, fromSqlKey, repsert, transactionSave, (+=.))
 import qualified Web.Telegram.Types as TT
-import Web.Telegram.Types.Update
+import Web.Telegram.Types.Update (Update (Message, message))
 
 data Note = Note {userTgId :: Int64, chatTgId :: Int64, count :: Int}
 
-getOrCreate :: (PersistStoreWrite backend, PersistEntity e, MonadIO m, PersistEntityBackend e ~ BaseBackend backend) => ReaderT backend m (Maybe (Entity e)) -> e -> ReaderT backend m (Entity e)
-getOrCreate byFieldVal fbEntity =
-  do
-    user <- byFieldVal
-    case user of
-      Just u -> pure u
-      Nothing -> insertEntity fbEntity
+-- getOrCreate :: (PersistStoreWrite backend, PersistEntity e, MonadIO m, PersistEntityBackend e ~ BaseBackend backend) => ReaderT backend m (Maybe (Entity e)) -> e -> ReaderT backend m (Entity e)
+-- getOrCreate byFieldVal fbEntity =
+--   do
+--     user <- byFieldVal
+--     case user of
+--       Just u -> pure u
+--       Nothing -> insertEntity fbEntity
 
 createNote :: MonadIO m => Note -> AppT m ()
 createNote p = do
@@ -38,28 +38,25 @@ createNote p = do
   let Note {userTgId, chatTgId, count} = p
   MDLS.runDb
     ( do
-        user <- getOrCreate (getBy $ MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId False)
-        chat <- getOrCreate (getBy $ MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId)
-        ratingEntity <- getBy $ MDLS.UniqueRating (entityKey user) (entityKey chat)
-        case ratingEntity of
-          Nothing ->
-            do
-              insertEntity
-                ( MDLS.Rating
-                    { MDLS.ratingCount = count,
-                      MDLS.ratingUser = entityKey user,
-                      MDLS.ratingChat = entityKey chat
-                    }
-                )
-              pure ()
-          Just (Entity key MDLS.Rating {ratingCount = currentCount}) -> update key [MDLS.RatingCount =. currentCount + count]
+        -- tra
+        user <- upsertBy (MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId False) []
+        chat <- upsertBy (MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId) []
+        ratingEntity <-
+          upsertBy
+            (MDLS.UniqueRating (entityKey user) (entityKey chat))
+            ( MDLS.Rating
+                { MDLS.ratingCount = count,
+                  MDLS.ratingUser = entityKey user,
+                  MDLS.ratingChat = entityKey chat
+                }
+            )
+            [MDLS.RatingCount +=. count]
         pure ()
     )
 
   pure ()
 
---   return $ fromSqlKey newUser
-updateHandler :: MonadIO m => Update -> AppT m ()
+-- updateHandler :: MonadIO m => Update -> AppT m ()
 updateHandler update =
   do
     case update of
@@ -73,7 +70,10 @@ updateHandler update =
                     },
                 TT.content = TT.TextM {TT.text = text}
               }
-        } | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
+        }
+          | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
+          | userTgId == chatTgId -> safeHandleDirectMessage userTgId text
+          | otherwise -> liftIO $ print update
       _ -> liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text

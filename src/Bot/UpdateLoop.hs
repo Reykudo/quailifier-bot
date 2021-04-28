@@ -12,6 +12,7 @@
 
 module Bot.UpdateLoop where
 
+import Bot.Client (getUpdates)
 import Config (Config (Config, configTgMaxHandlers, configToken))
 import Control.Applicative (Applicative (pure), (<|>))
 import Control.Concurrent (forkIO, newChan)
@@ -99,46 +100,6 @@ import Web.Telegram.Types.Update
       ),
   )
 
-type Routes = WTA.GetUpdates
-
-getUpdates :: Token -> Polling -> IO (ReqResult [Update])
-getUpdates =
-  SC.hoistClient
-    (Proxy :: Proxy Routes)
-    handleClient
-    (SC.client (Proxy :: Proxy Routes))
-
-handleClient :: SC.ClientM b -> IO b
-handleClient clientM = do
-  manager <- newTlsManager
-  let clientEnv =
-        SC.mkClientEnv
-          manager
-          ( SC.BaseUrl
-              { SC.baseUrlScheme = SC.Http,
-                SC.baseUrlHost = "api.telegram.org",
-                SC.baseUrlPort = 80,
-                SC.baseUrlPath = ""
-              }
-          )
-  eResponse <-
-    Retry.retrying
-      (Retry.limitRetries 999999)
-      ( \status response -> do
-          TIO.putStrLn $ "status " <> T.pack (show status)
-          case response of
-            Right b -> pure False
-            Left e -> do
-              TIO.putStrLn $ "error ocured " <> T.pack (show e)
-              case e of
-                SC.ConnectionError (SomeException _) -> pure True
-                SC.DecodeFailure _ _ -> pure False
-                _ -> pure True
-      )
-      (const $ SC.runClientM clientM clientEnv)
-
-  either throwIO pure eResponse
-
 -- outputQueueHandler :: Chan (Maybe Text) -> IO ()
 -- outputQueueHandler queue =
 --   forever
@@ -169,6 +130,7 @@ getUpdateId update = case update of
   PreCheckoutQuery {updateId} -> Just updateId
   PollUpdate {updateId} -> Just updateId
   Unknown {updateId} -> Just updateId
+  _ -> error "not matched getUpdateId"
 
 updateLoop :: Config -> (Update -> IO ()) -> IO ()
 updateLoop cfg handle = do

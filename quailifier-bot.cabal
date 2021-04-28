@@ -25,6 +25,8 @@ source-repository head
 
 library
   exposed-modules:
+      Bot.Client
+      Bot.CommandHandler
       Bot.Models
       Bot.UpdateHandler
       Bot.UpdateLoop
@@ -41,6 +43,7 @@ library
     , base
     , bytestring
     , containers
+    , either
     , ekg
     , ekg-core
     , env-extra
@@ -99,6 +102,7 @@ executable quailifier-bot-exe
     , base
     , bytestring
     , containers
+    , either
     , ekg
     , ekg-core
     , env-extra
@@ -159,6 +163,7 @@ test-suite quailifier-bot-test
     , base
     , bytestring
     , containers
+    , either
     , ekg
     , ekg-core
     , env-extra
