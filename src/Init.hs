@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Init where
 
@@ -13,7 +14,7 @@ import Bot.UpdateLoop (updateLoop)
 import Config (App, AppT (runAppT), Config (..), Environment (..), makePool, setLogger)
 import Control.Concurrent (killThread)
 import Control.Exception.Safe
-import Control.Monad.Except (runExceptT)
+import Control.Monad.Except (MonadTrans (lift), runExceptT)
 import Control.Monad.Logger
 import qualified Control.Monad.Metrics as M
 import Control.Monad.Reader (ReaderT (runReaderT))
@@ -24,6 +25,7 @@ import qualified Data.Text as T
 import qualified Data.Text as Text
 import Data.Typeable
 import Database.Persist.Postgresql (runSqlPool)
+import Katip (LogEnv (LogEnv))
 import qualified Katip
 import Lens.Micro ((^.))
 import Logger (defaultLogEnv)
@@ -60,8 +62,10 @@ initialize cfg = do
     let logger = setLogger (configEnv cfg)
     say "run migrations"
     liftIO $
-      bracket (say "starting to run migrations") (\_ -> say "migrations complete") $
-        ( \_ -> do
+      bracket
+        (say "starting to run migrations")
+        (const $ say "migrations complete")
+        ( const $ do
             say "actually running migrations"
             runSqlPool doMigrations (configPool cfg) `catch` \(SomeException e) -> do
               say $
@@ -84,8 +88,9 @@ initialize cfg = do
           pure ()
       )
 
-withConfig :: MonadIO m => (Config -> IO a) -> m a
-withConfig action = liftIO $ do
+-- withConfig :: (Config -> IO b) -> App ()
+withConfig :: (Config -> IO ()) -> IO ()
+withConfig action = do
   say "acquireConfig"
   port <- lookupSetting "PORT" 8081
   say $ "on port:" <> tshow port
@@ -93,28 +98,32 @@ withConfig action = liftIO $ do
   token <- lookupSetting "TG_BOT_QUALIFIER_TOKEN" ""
   maxHandlers <- lookupSetting "MAX_HANDLERS" 20
   say $ "on env: " <> tshow env
-  bracket defaultLogEnv (\x -> say "closing katip scribes" >> Katip.closeScribes x) $ \logEnv -> do
-    say "got log env"
-    !pool <- makePool env logEnv `onException` say "exception in makePool"
-    say "got pool "
-    bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do
-      say "forked ekg server"
-      let store = serverMetricStore ekgServer
-      waiMetrics <- registerWaiMetrics store `onException` say "exception in registerWaiMetrics"
-      say "registered wai metrics"
-      metr <- M.initializeWith store
-      say "got metrics"
-      action
-        Config
-          { configPool = pool,
-            configEnv = env,
-            -- , configMetrics = metr
-            configLogEnv = logEnv,
-            configPort = port,
-            configEkgServer = serverThreadId ekgServer,
-            configToken = Token $ T.pack token,
-            configTgMaxHandlers = maxHandlers
-          }
+  let q :: LogEnv -> IO ()
+      q logEnv = do
+        say "got log env"
+        !pool <- Katip.runKatipT logEnv (makePool env) `onException` say "exception in makePool"
+        say "got pool "
+        liftIO $
+          bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do
+            say "forked ekg server"
+            let store = serverMetricStore ekgServer
+            -- waiMetrics <- registerWaiMetrics store `onException` say "exception in registerWaiMetrics"
+            -- say "registered wai metrics"
+            -- metr <- M.initializeWith store
+            -- say "got metrics"
+            action
+              Config
+                { configPool = pool,
+                  configEnv = env,
+                  -- , configMetrics = metr
+                  configLogEnv = logEnv,
+                  configPort = port,
+                  configEkgServer = serverThreadId ekgServer,
+                  configToken = Token $ T.pack token,
+                  configTgMaxHandlers = maxHandlers
+                }
+
+  bracket defaultLogEnv (\x -> say "closing katip scribes" >> Katip.closeScribes x) $ q
 
 -- | Takes care of cleaning up 'Config' resources
 shutdownApp :: Config -> IO ()

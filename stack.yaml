@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-15.7
+resolver: lts-17.10
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -40,24 +40,20 @@ packages:
 #   commit: e7b331f14bcffb8367cd58fbfc8b40ec7642100a
 #
 extra-deps:
-  - aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
-  - generic-lens-1.2.0.1@sha256:faecffd513340cd570866aa8f3e0e139d3f9240ecd3eb766357cdf47f550004c,6550
-  - lens-4.18.1@sha256:c3fc35707ea1034ade56889a658e34dce944b128765d2215075d5787cb4064a0,15981
-  - open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
-  - servant-0.16.2@sha256:6c5d19d09a9dd2f2b2bf99193f944491f8374802678b79ec729e3f3ae51e216d,5867
-  - servant-client-0.16.0.1@sha256:f970ad4e927530b77f52b99a175c85cfdcd1ef988083d56a1f68c6a3dafe8d51,4376
-  - servant-multipart-0.11.6@sha256:1863862e507dd6f672b4c9d2c6d87d4faec19686ced3d828d712ada07536cddb,2655
-  - deriving-aeson-0.2.6.1@sha256:bd7930b334afab3eb53dcdd5e1e820ec878917a8215d6f80be05bc485df8e0be,1279
-  - env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
-  - ekg-0.4.0.15@sha256:d6e48859a89fbbe23496f871581e44a41f97dac627c2b9db81f49b92fa066516,2031
-  - ekg-core-0.1.1.7@sha256:c4356aefea0e1e2f80a236d3b3f81b83b445c1e53519302e96477da0adee2e9f,2039
-  - monad-metrics-0.2.2.0@sha256:6c4d51d5d237c4085cea56625c3d364f39f6bf54d43b9dfa93e9cf3890e6a511,1914
-  - wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
-  - ekg-json-0.1.0.6@sha256:e16efc1b09ae7635db3f0535335ee3e8aa666fe4bf3749783f4022020f6ca3b8,1050
   - github: Reykudo/telegram-types
-    commit: 32030d2220e9c4c4e955ed50046bbc8331b9767e
+    commit: 1acc443408bd859d5ba5fb7b5807bad2dddd681e
   - github: Reykudo/telegram-raw-api
-    commit: 4e2f2e901c215b8cb5e1f91ba377b5930ecac371
+    commit: f5ad16d5eefc88a9505e15ccf59a66067606eaf7
+  - env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
+  - open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
+  - servant-js-0.9.4.2@sha256:2419d2cba7ff71926293fa11fc50eaed24a77ba34e7c778eab4cfa1f4bc4a748,3385
+  - wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
+  - github: enobayram/type-fun
+    commit: 35bda1ea0176b1a92f8e96e5cd0efa9dbc4d7e7c
+
+  - persistent-2.12.1.1@sha256:90396838685cb23f1a9ac0fe4e9d3e75ada64c5d6b40bfb1a473860fb3dc15a9,5901
+  - persistent-postgresql-2.12.1.1@sha256:b14188566d4768074089cbfc139e7f4f78e03bb00e97462d63dc3054af2894d6,3454
+  - persistent-template-2.12.0.0@sha256:7c68de6624ff83e14b674745e1c895dcf7c8676f6f24be131c89e2e4c2fa4510,1008
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

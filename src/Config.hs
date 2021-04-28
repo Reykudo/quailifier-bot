@@ -1,10 +1,13 @@
+{-# LANGUAGE DerivingVia #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Config where
 
@@ -12,20 +15,29 @@ module Config where
 
 import Control.Concurrent (ThreadId)
 import Control.Exception.Safe (MonadCatch, throwIO)
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+
+import Control.Monad (liftM)
 import Control.Monad.Except (ExceptT, MonadError)
 import Control.Monad.IO.Class
-import Control.Monad.Logger (MonadLogger (..))
+import Control.Monad.Logger (LogLevel (LevelDebug, LevelError, LevelInfo, LevelOther, LevelWarn), MonadLogger (..), MonadLoggerIO)
+import qualified Control.Monad.Logger as FastLogger
+import Control.Monad.Logger.CallStack (MonadLoggerIO (askLoggerIO))
 import Control.Monad.Reader (MonadIO, MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import qualified Data.ByteString.Char8 as BS
 import Data.Monoid ((<>))
+import Data.Pool (Pool)
 import qualified Data.Text as T
 import Database.Persist.Postgresql
   ( ConnectionPool,
     ConnectionString,
+    SqlBackend,
     createPostgresqlPool,
+    liftSqlPersistMPool,
   )
+import qualified Katip
 import Logger
 import Network.Wai (Middleware)
 import Network.Wai.Handler.Warp (Port)
@@ -33,6 +45,7 @@ import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
 import Servant.Client (ClientError)
 import Servant.Server.Internal.ServerError
 import System.Environment (lookupEnv)
+import UnliftIO (MonadUnliftIO, UnliftIO (unliftIO))
 import Web.Telegram.API (Token (Token))
 
 -- | This type represents the effects we want to have for our application.
@@ -69,6 +82,9 @@ data Config = Config
     configTgMaxHandlers :: Int
   }
 
+-- instance (MonadIO m, Katip IO) => MonadLoggerIO (KatipT m) where
+--   askLoggerIO = pure $ adapt logMsg
+
 -- instance Monad m => MonadMetrics (AppT m) where
 --     getMetrics = asks Config.configMetrics
 
@@ -77,6 +93,10 @@ instance MonadIO m => Katip (AppT m) where
   getLogEnv = asks configLogEnv
   localLogEnv = error "not implemented"
 
+-- instance (MonadReader Config m, MonadIO m) => Katip m where
+--   getLogEnv = asks configLogEnv
+--   localLogEnv = error "not implemented"
+
 -- | MonadLogger instance to use within @AppT m@
 instance MonadIO m => MonadLogger (AppT m) where
   monadLoggerLog = adapt logMsg
@@ -84,6 +104,15 @@ instance MonadIO m => MonadLogger (AppT m) where
 -- | MonadLogger instance to use in @makePool@
 instance MonadIO m => MonadLogger (KatipT m) where
   monadLoggerLog = adapt logMsg
+
+instance (MonadIO m, Katip m, MonadLogger m) => MonadLoggerIO m where
+  askLoggerIO = do
+    logEnv <- getLogEnv
+    pure (\a b c d -> runKatipT logEnv $ monadLoggerLog a b c d)
+
+-- pure a
+
+-- not sure how fast this is going to be
 
 -- | Right now, we're distinguishing between three environments. We could
 -- also add a @Staging@ environment if we needed to.
@@ -112,12 +141,11 @@ katipLogger env app req respond = runKatipT env $ do
 -- insecure connection string. The 'Production' environment acquires the
 -- information from environment variables that are set by the keter
 -- deployment application.
-makePool :: Environment -> LogEnv -> IO ConnectionPool
-makePool Test env =
-  runKatipT env (createPostgresqlPool (connStr "-test") (envPool Test))
-makePool Development env =
-  runKatipT env $ createPostgresqlPool (connStr "") (envPool Development)
-makePool Production env = do
+-- makePool :: Environment -> LogEnv -> IO ConnectionPool
+makePool :: Environment -> KatipT IO ConnectionPool
+makePool Test = createPostgresqlPool (connStr "-test") (envPool Test)
+makePool Development = createPostgresqlPool (connStr "") (envPool Development)
+makePool Production = do
   -- This function makes heavy use of the 'MaybeT' monad transformer, which
   -- might be confusing if you're not familiar with it. It allows us to
   -- combine the effects from 'IO' and the effect of 'Maybe' into a single
@@ -125,31 +153,32 @@ makePool Production env = do
   -- @a@. If we just had @IO (Maybe a)@, then binding out of the IO would
   -- give us a @Maybe a@, which would make the code quite a bit more
   -- verbose.
-  pool <- runMaybeT $ do
-    let keys =
-          [ "host=",
-            "port=",
-            "user=",
-            "password=",
-            "dbname="
-          ]
-        envs =
-          [ "PGHOST",
-            "PGPORT",
-            "PGUSER",
-            "PGPASS",
-            "PGDATABASE"
-          ]
-    envVars <- traverse (MaybeT . lookupEnv) envs
-    let prodStr = BS.intercalate " " . zipWith (<>) keys $ BS.pack <$> envVars
-    lift $ runKatipT env $ createPostgresqlPool prodStr (envPool Production)
+  pool <-
+    runMaybeT $ do
+      let keys =
+            [ "host=",
+              "port=",
+              "user=",
+              "password=",
+              "dbname="
+            ]
+          envs =
+            [ "PGHOST",
+              "PGPORT",
+              "PGUSER",
+              "PGPASS",
+              "PGDATABASE"
+            ]
+      envVars <- traverse (MaybeT . liftIO . lookupEnv) envs
+      let prodStr = BS.intercalate " " . zipWith (<>) keys $ BS.pack <$> envVars
+      pure $ createPostgresqlPool prodStr (envPool Production)
   case pool of
     -- If we don't have a correct database configuration, we can't
     -- handle that in the program, so we throw an IO exception. This is
     -- one example where using an exception is preferable to 'Maybe' or
     -- 'Either'.
-    Nothing -> throwIO (userError "Database Configuration not present in environment.")
-    Just a -> return a
+    Nothing -> liftIO $ throwIO (userError "Database Configuration not present in environment.")
+    Just a -> a
 
 -- | The number of pools to use for a given environment.
 envPool :: Environment -> Int

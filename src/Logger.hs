@@ -34,13 +34,7 @@ fromLevel (LevelOther _) = NoticeS
 -- | Transforms Katip logMsg into monadLoggerLog to be used inside
 -- MonadLogger monad
 adapt ::
-  (ToLogStr msg, Applicative m, Katip m) =>
-  (Namespace -> Severity -> Katip.LogStr -> m ()) ->
-  Loc ->
-  LogSource ->
-  LogLevel ->
-  msg ->
-  m ()
+  (ToLogStr msg, Applicative m, Katip m) => (Namespace -> Severity -> Katip.LogStr -> m ()) -> Loc -> LogSource -> LogLevel -> msg -> m ()
 adapt f _ src lvl msg =
   f ns (fromLevel lvl) $ logStr' msg
   where

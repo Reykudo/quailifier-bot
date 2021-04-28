@@ -23,8 +23,8 @@ dependencies:
   - base
   - servant
   - servant-server
-  - servant-swagger
-  - swagger2
+  # - servant-swagger
+  # - swagger2
   - text
   - wai
   - aeson
@@ -38,13 +38,12 @@ dependencies:
   - servant-client
   - containers
   - http-client
-  - optparse-applicative
   - servant
   - http-client-tls
   - retry
   - generic-deriving
   - env-extra
-  - opaleye
+  # - opaleye
   - product-profunctors
   - time
   - postgresql-simple
@@ -61,12 +60,11 @@ dependencies:
   - monad-logger
   - monad-metrics
   - mtl
-  - persistent
-  - persistent-postgresql
-  - persistent-template
+  - persistent >= 2.12.1.1
+  - persistent-postgresql >= 2.12.1.1
+  - persistent-template >= 2.12.0.0
   - safe
   - servant
-  - servant-js
   - servant-server
   - text
   - transformers
@@ -80,6 +78,7 @@ dependencies:
   - say
   - unliftio
   - either
+
 library:
   source-dirs: src
 

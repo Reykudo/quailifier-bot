@@ -5,61 +5,16 @@
 
 packages:
 - completed:
-    hackage: aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
+    size: 16285
+    url: https://github.com/Reykudo/telegram-types/archive/1acc443408bd859d5ba5fb7b5807bad2dddd681e.tar.gz
+    name: telegram-types
+    version: 0.4.1
+    sha256: c1722d7866a26ac2346a493dfc720028f86d0aa38b55a833ce635ae5ee05d574
     pantry-tree:
-      size: 40133
-      sha256: caa9306e519c601ab0170d113daa03c1163db53e5466be2968bbd61a771bebcb
+      size: 2318
+      sha256: d8e7ee791449487ee33bd377bea4b69c166bb1c1a982076f5bfae97d37bb9d2a
   original:
-    hackage: aeson-1.4.7.1@sha256:6d8d2fd959b7122a1df9389cf4eca30420a053d67289f92cdc0dbc0dab3530ba,7098
-- completed:
-    hackage: generic-lens-1.2.0.1@sha256:faecffd513340cd570866aa8f3e0e139d3f9240ecd3eb766357cdf47f550004c,6550
-    pantry-tree:
-      size: 4315
-      sha256: ea2099153bc65265915f206f08d25eed0d21270412505ea6470665df74b7f5ec
-  original:
-    hackage: generic-lens-1.2.0.1@sha256:faecffd513340cd570866aa8f3e0e139d3f9240ecd3eb766357cdf47f550004c,6550
-- completed:
-    hackage: lens-4.18.1@sha256:c3fc35707ea1034ade56889a658e34dce944b128765d2215075d5787cb4064a0,15981
-    pantry-tree:
-      size: 8253
-      sha256: 00b0c6c8956dd3d4524c0d9ca88707f72ce52e1d5c50ef6d27456b50b8fff554
-  original:
-    hackage: lens-4.18.1@sha256:c3fc35707ea1034ade56889a658e34dce944b128765d2215075d5787cb4064a0,15981
-- completed:
-    hackage: open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
-    pantry-tree:
-      size: 329
-      sha256: e01838ec41f7aa2a97aa2c3586c8188c4ad093ba0b2be41229ab7b8dbd33869e
-  original:
-    hackage: open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
-- completed:
-    hackage: servant-0.16.2@sha256:6c5d19d09a9dd2f2b2bf99193f944491f8374802678b79ec729e3f3ae51e216d,5867
-    pantry-tree:
-      size: 2604
-      sha256: bee4504840cf4836326e85f1cf02584bf898188b64d976dac6c6c6793d926794
-  original:
-    hackage: servant-0.16.2@sha256:6c5d19d09a9dd2f2b2bf99193f944491f8374802678b79ec729e3f3ae51e216d,5867
-- completed:
-    hackage: servant-client-0.16.0.1@sha256:f970ad4e927530b77f52b99a175c85cfdcd1ef988083d56a1f68c6a3dafe8d51,4376
-    pantry-tree:
-      size: 804
-      sha256: 3690a9c4dbdf8a502648c8c29029b1a0c78e53fd84db90ed388f7abbf5518c25
-  original:
-    hackage: servant-client-0.16.0.1@sha256:f970ad4e927530b77f52b99a175c85cfdcd1ef988083d56a1f68c6a3dafe8d51,4376
-- completed:
-    hackage: servant-multipart-0.11.6@sha256:1863862e507dd6f672b4c9d2c6d87d4faec19686ced3d828d712ada07536cddb,2655
-    pantry-tree:
-      size: 386
-      sha256: 3d45dc52822a30de2ee524358bf91ad77c041c4385ab75d636effa17e02e351e
-  original:
-    hackage: servant-multipart-0.11.6@sha256:1863862e507dd6f672b4c9d2c6d87d4faec19686ced3d828d712ada07536cddb,2655
-- completed:
-    hackage: deriving-aeson-0.2.6.1@sha256:bd7930b334afab3eb53dcdd5e1e820ec878917a8215d6f80be05bc485df8e0be,1279
-    pantry-tree:
-      size: 441
-      sha256: 02e0991b6baf47010f1e693b77e29bfead64537a6b3aec890ebee066aa76ab12
-  original:
-    hackage: deriving-aeson-0.2.6.1@sha256:bd7930b334afab3eb53dcdd5e1e820ec878917a8215d6f80be05bc485df8e0be,1279
+    url: https://github.com/Reykudo/telegram-types/archive/1acc443408bd859d5ba5fb7b5807bad2dddd681e.tar.gz
 - completed:
     hackage: env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
     pantry-tree:
@@ -68,26 +23,19 @@ packages:
   original:
     hackage: env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
 - completed:
-    hackage: ekg-0.4.0.15@sha256:d6e48859a89fbbe23496f871581e44a41f97dac627c2b9db81f49b92fa066516,2031
+    hackage: open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
     pantry-tree:
-      size: 1495
-      sha256: e56e9c0eadc309a27400af106a2d3133d70ad0a3bbbb9be2c54e837ccdb4a77d
+      size: 329
+      sha256: e01838ec41f7aa2a97aa2c3586c8188c4ad093ba0b2be41229ab7b8dbd33869e
   original:
-    hackage: ekg-0.4.0.15@sha256:d6e48859a89fbbe23496f871581e44a41f97dac627c2b9db81f49b92fa066516,2031
+    hackage: open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
 - completed:
-    hackage: ekg-core-0.1.1.7@sha256:c4356aefea0e1e2f80a236d3b3f81b83b445c1e53519302e96477da0adee2e9f,2039
+    hackage: servant-js-0.9.4.2@sha256:2419d2cba7ff71926293fa11fc50eaed24a77ba34e7c778eab4cfa1f4bc4a748,3385
     pantry-tree:
-      size: 1073
-      sha256: f403baeb7787c69c5e28f5aa1e94f78d4363beb19362d66f18de4a1aef0723fe
+      size: 961
+      sha256: c3c27de2989ed3537567ef531406ccd88c6e715cf85e8da554fca1da78c1104d
   original:
-    hackage: ekg-core-0.1.1.7@sha256:c4356aefea0e1e2f80a236d3b3f81b83b445c1e53519302e96477da0adee2e9f,2039
-- completed:
-    hackage: monad-metrics-0.2.2.0@sha256:6c4d51d5d237c4085cea56625c3d364f39f6bf54d43b9dfa93e9cf3890e6a511,1914
-    pantry-tree:
-      size: 457
-      sha256: d873e6c5cc136dbcf9baa5b4f5e789e79e643f62a6dde28bedfe6f415a2e293d
-  original:
-    hackage: monad-metrics-0.2.2.0@sha256:6c4d51d5d237c4085cea56625c3d364f39f6bf54d43b9dfa93e9cf3890e6a511,1914
+    hackage: servant-js-0.9.4.2@sha256:2419d2cba7ff71926293fa11fc50eaed24a77ba34e7c778eab4cfa1f4bc4a748,3385
 - completed:
     hackage: wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
     pantry-tree:
@@ -96,26 +44,40 @@ packages:
   original:
     hackage: wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
 - completed:
-    hackage: ekg-json-0.1.0.6@sha256:e16efc1b09ae7635db3f0535335ee3e8aa666fe4bf3749783f4022020f6ca3b8,1050
+    size: 5775
+    url: https://github.com/enobayram/type-fun/archive/35bda1ea0176b1a92f8e96e5cd0efa9dbc4d7e7c.tar.gz
+    name: type-fun
+    version: 0.1.2
+    sha256: 3eebb09159b162a668f15ee91909088ec138b7125d5bd2fb672b458b73f89d20
     pantry-tree:
-      size: 265
-      sha256: 09239a4e3ab0d58be0ac360d41c491df017f4a18ba558fd67909e24f14caece7
+      size: 736
+      sha256: 4be2b7a4fdbe6632a4938c8137073c9d66a7ccf8d0ced058373197c335f44018
   original:
-    hackage: ekg-json-0.1.0.6@sha256:e16efc1b09ae7635db3f0535335ee3e8aa666fe4bf3749783f4022020f6ca3b8,1050
+    url: https://github.com/enobayram/type-fun/archive/35bda1ea0176b1a92f8e96e5cd0efa9dbc4d7e7c.tar.gz
 - completed:
-    size: 16204
-    url: https://github.com/Reykudo/telegram-types/archive/32030d2220e9c4c4e955ed50046bbc8331b9767e.tar.gz
-    name: telegram-types
-    version: 0.4.1
-    sha256: 7051864ef38ad8babf97d3334a527ca3488b839f62ebe4b5cc179d9bea34199b
+    hackage: persistent-2.12.1.1@sha256:90396838685cb23f1a9ac0fe4e9d3e75ada64c5d6b40bfb1a473860fb3dc15a9,5901
     pantry-tree:
-      size: 2318
-      sha256: b7517c34741b3cacf059daa0a65da20542bb12bdf1e31743e1c8b99957942a97
+      size: 2908
+      sha256: a5a8727ec2cac3c2c43ac9b1894ce8fdbc5b80fe1c8879cfcae8f387adf5224e
   original:
-    url: https://github.com/Reykudo/telegram-types/archive/32030d2220e9c4c4e955ed50046bbc8331b9767e.tar.gz
+    hackage: persistent-2.12.1.1@sha256:90396838685cb23f1a9ac0fe4e9d3e75ada64c5d6b40bfb1a473860fb3dc15a9,5901
+- completed:
+    hackage: persistent-postgresql-2.12.1.1@sha256:b14188566d4768074089cbfc139e7f4f78e03bb00e97462d63dc3054af2894d6,3454
+    pantry-tree:
+      size: 923
+      sha256: 75b7eb182bdfe727d02ef5605e63be4b795822fa89762fda4a940ac0782b5423
+  original:
+    hackage: persistent-postgresql-2.12.1.1@sha256:b14188566d4768074089cbfc139e7f4f78e03bb00e97462d63dc3054af2894d6,3454
+- completed:
+    hackage: persistent-template-2.12.0.0@sha256:7c68de6624ff83e14b674745e1c895dcf7c8676f6f24be131c89e2e4c2fa4510,1008
+    pantry-tree:
+      size: 267
+      sha256: 6d31d8a3bde912d0c8b28d9d18caa77a5a7add42104d8bb109f7cd298f21a78f
+  original:
+    hackage: persistent-template-2.12.0.0@sha256:7c68de6624ff83e14b674745e1c895dcf7c8676f6f24be131c89e2e4c2fa4510,1008
 snapshots:
 - completed:
-    size: 491389
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/15/7.yaml
-    sha256: 92ab6303fe20ec928461c82ce0980b4d17c06f4e66205a2967e476474f686c17
-  original: lts-15.7
+    size: 567241
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/17/10.yaml
+    sha256: 321b3b9f0c7f76994b39e0dabafdc76478274b4ff74cc5e43d410897a335ad3b
+  original: lts-17.10
