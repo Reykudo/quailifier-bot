@@ -66,7 +66,7 @@ import qualified Web.Telegram.API as WTA
     GetMe,
     GetUpdates,
     SendMessage,
-    Token (..),
+    Token (..), GetChat
   )
 import Web.Telegram.API.Sending.Data
   ( SMessage
@@ -108,7 +108,7 @@ import Web.Telegram.Types.Update
       ),
   )
 
-type Routes = WTA.SendMessage :<|> WTA.GetChatMember
+type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat 
 
 getUpdateProxy = Proxy @WTA.GetUpdates
 
@@ -129,14 +129,14 @@ getUpdates =
   SC.hoistClient
     getUpdateProxy
     ( \c -> do
-        response <- runReaderT (eternalRetry c) cfg
+        response <- runReaderT (handleClient c) cfg
         either (error . show) pure response
     )
     (SC.client getUpdateProxy)
 
 -- sendMessage :: (MonadIO m) => Token -> SMessage -> m (ReqResult Message)
 -- getChatMember :: (MonadIO m) => (Token -> ChatId -> Int -> m (ReqResult ChatMember))
-sendMessage :<|> getChatMember = mainClient
+sendMessage :<|> getChatMember :<|> getChat = mainClient
 
 -- mainClient :: (MonadIO m) => ((Token -> SMessage -> m (ReqResult Message)) :<|> (Token -> ChatId -> Int -> m (ReqResult ChatMember)))
 mainClient =
@@ -155,7 +155,7 @@ handleClient clientM = do
   let clientEnv = SC.mkClientEnv manager clientCfg
   liftIO $
     Retry.retrying
-      (Retry.limitRetries 5)
+      (Retry.limitRetries 500)
       ( \status response -> do
           TIO.putStrLn $ "status " <> T.pack (show status)
           case response of

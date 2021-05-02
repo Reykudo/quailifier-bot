@@ -8,8 +8,10 @@
 
 module Bot.UpdateHandler where
 
+import Bot.CommandHandler (safeHandleDirectMessage)
 import qualified Bot.Models as MDLS
 import Config (AppT (AppT), Config)
+import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO))
 import Control.Monad.Logger (logDebugNS)
 import Control.Monad.RWS (MonadReader)
@@ -59,7 +61,6 @@ createNote p = do
   pure ()
 
 --   return $ fromSqlKey newUser
-updateHandler :: MonadIO m => Update -> AppT m ()
 updateHandler update =
   do
     case update of
@@ -73,7 +74,10 @@ updateHandler update =
                     },
                 TT.content = TT.TextM {TT.text = text}
               }
-        } | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
+        }
+          | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
+          | chatTgId == userTgId -> void $ safeHandleDirectMessage userTgId text
+      -- TT.BC {TT.command} -> undefined
       _ -> liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text

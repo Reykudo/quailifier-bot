@@ -2,17 +2,19 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module Config where
 
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+
 import Control.Concurrent (ThreadId)
-import Control.Exception.Safe (throwIO)
+import Control.Exception.Safe (MonadCatch, throwIO)
 import Control.Monad.Except (ExceptT, MonadError)
 import Control.Monad.IO.Class
 import Control.Monad.Logger (MonadLogger (..))
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 import Control.Monad.Reader (MonadIO, MonadReader, ReaderT, asks)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)

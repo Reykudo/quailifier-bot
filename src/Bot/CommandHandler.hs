@@ -9,7 +9,7 @@
 
 module Bot.CommandHandler where
 
-import Bot.Client (sendMessage)
+import Bot.Client (getChat, sendMessage)
 import qualified Bot.Models as MD
 import Config (AppT, Config (Config, configToken))
 import Control.Applicative (Alternative, liftA)
@@ -17,7 +17,7 @@ import Control.Exception (Exception, catch, throw)
 import Control.Exception.Safe (MonadThrow, SomeException (SomeException), throwIO, throwM, try)
 import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift))
-import Control.Monad.Except (MonadError (catchError), liftEither, runExceptT)
+import Control.Monad.Except (MonadError (catchError, throwError), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.RWS (MonadIO, MonadReader (ask), guard)
 import Control.Monad.Reader (ReaderT (ReaderT))
@@ -70,17 +70,17 @@ handleDirectMessage userTgIdV text = do
   logDebugNS "web" "handle comand"
   user' <- MD.runDb $ selectFirst [MD.UserTgId ==. userTgIdV] []
   userEntity@Entity {entityVal} <- case user' of
-    Nothing -> throwM UserNotFound
+    Nothing -> throwError UserNotFound
     Just r -> pure r
 
-  reply userEntity $ dmFromText text
+  -- reply userEntity $ text
 
-  liftIO $ print $ show entityVal
+  -- liftIO $ print $ show entityVal
   pure ()
 
 -- safeHandleDirectMessage :: (MonadReader Config m, MonadLogger m, MonadIO m, Eq a, IsString a) => Int64 -> a -> m ()
 safeHandleDirectMessage userTgId text = do
-  e <- try $ handleDirectMessage userTgId text
+  e <- runExceptT $ handleDirectMessage userTgId text
   case e of
     Left e -> reportException (ChatId userTgId) e
     Right r -> pure r
@@ -91,7 +91,7 @@ safeHandleDirectMessage userTgId text = do
 -- reply :: MonadIO m => Entity MD.User -> DMCommand -> ReaderT Config m ()
 -- reply :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend) => Entity MD.User -> p -> ReaderT Config m ()
 -- reply :: MonadReader Config m => Entity MD.User -> p -> m ()
-reply :: (MonadReader Config m, MonadIO m) => Entity MD.User -> DMCommand -> m ()
+reply :: (MonadReader Config m, MonadIO m) => Entity MD.User -> Text -> m ()
 reply user command = do
   Config {configToken} <- ask
   let sendBack = \text ->
@@ -108,13 +108,16 @@ reply user command = do
                   replyMarkup = Nothing
                 }
             )
+  -- res <- getChat configToken $ ChatId $ read $ T.unpack command
+  sendBack $ T.pack $ show user
+  pure ()
 
-  case command of
-    GetMe -> do
-      let Entity {entityKey = userId} = user
-      ratings <- MD.runDb $ selectList [MD.RatingUser ==. userId] []
-      traverse_ (sendBack . T.pack . show . MD.ratingCount . entityVal) ratings
-    _ -> void $ sendBack "Not implemented"
+-- case command of
+--   GetMe -> do
+--     let Entity {entityKey = userId} = user
+--     ratings <- MD.runDb $ selectList [MD.RatingUser ==. userId] []
+--     traverse_ (sendBack . T.pack . show . MD.ratingCount . entityVal) ratings
+--   _ -> void $ sendBack "Not implemented"
 
 -- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError DMException m) => Text -> DMException -> m ()
 reportException :: (MonadLogger m, MonadReader Config m, MonadIO m) => ChatId -> DMException -> m ()
