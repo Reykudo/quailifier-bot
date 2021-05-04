@@ -21,63 +21,49 @@ description: Please see the README on GitHub at <https://github.com/Reykudo/quai
 
 dependencies:
   - base
-  - servant
-  - servant-server
-  # - servant-swagger
-  # - swagger2
-  - text
-  - wai
-  - aeson
-  - warp
-  - bytestring
-  - mtl
-  - transformers
-  - telegram-raw-api
-  - hashable
-  - telegram-types
-  - servant-client
-  - containers
-  - http-client
-  - servant
-  - http-client-tls
-  - retry
-  - generic-deriving
-  - env-extra
-  # - opaleye
-  - product-profunctors
-  - time
-  - postgresql-simple
   - aeson
   - bytestring
   - containers
+  - either
   - ekg
   - ekg-core
+  - env-extra
+  - mtl
   - fast-logger
   - foreign-store
+  - generic-deriving
+  - hashable
+  - http-client
+  - http-client-tls
   - katip
   - microlens
   - monad-control
   - monad-logger
   - monad-metrics
-  - mtl
   - persistent >= 2.12.1.1
   - persistent-postgresql >= 2.12.1.1
   - persistent-template >= 2.12.0.0
+  - postgresql-simple
+  - product-profunctors
+  - resource-pool
+  - retry
   - safe
+  - safe-exceptions
+  - say
   - servant
+  - servant-client
   - servant-server
+  - telegram-raw-api
+  - telegram-types
   - text
+  - time
   - transformers
+  - unliftio
   - unordered-containers
   - wai
   - wai-extra
   - wai-middleware-metrics
   - warp
-  - resource-pool
-  - safe-exceptions
-  - say
-  - unliftio
-  - either
 
 library:
   source-dirs: src

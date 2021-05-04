@@ -5,17 +5,18 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StrictData #-}
+{-# LANGUAGE TypeApplications #-}
 
 module Bot.UpdateHandler where
 
-import Bot.CommandHandler (safeHandleDirectMessage)
+import Bot.Handler.Message (handleMessage)
 import qualified Bot.Models as MDLS
 import Config (AppT (AppT), Config)
 import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO))
-import Control.Monad.Logger (logDebugNS)
+import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.RWS (MonadReader)
-import Control.Monad.Reader (ReaderT (ReaderT))
+import Control.Monad.Reader (ReaderT (ReaderT, runReaderT))
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Database.Persist ((=.))
@@ -23,56 +24,10 @@ import Database.Persist.Postgresql (Entity (entityKey), PersistUniqueWrite (upse
 import qualified Web.Telegram.Types as TT
 import Web.Telegram.Types.Update
 
-data Note = Note {userTgId :: Int64, chatTgId :: Int64, count :: Int}
-
-createNote :: MonadIO m => Note -> AppT m ()
-createNote p = do
-  -- increment "createUser"
-  logDebugNS "web" "creating a user"
-  let Note {userTgId, chatTgId, count} = p
-  MDLS.runDb
-    ( do
-        user <- upsertBy (MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId False) [MDLS.UserTgId =. userTgId]
-        chat <- upsertBy (MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId) [MDLS.ChatTgId =. chatTgId]
-        ratingEntity <-
-          upsertBy
-            ( MDLS.UniqueRating
-                (entityKey user)
-                (entityKey chat)
-            )
-            ( ( MDLS.Rating
-                  { MDLS.ratingCount = count,
-                    MDLS.ratingUser = entityKey user,
-                    MDLS.ratingChat = entityKey chat
-                  }
-              )
-            )
-            [MDLS.RatingCount +=. count]
-
-        pure ()
-    )
-
-  pure ()
-
 --   return $ fromSqlKey newUser
-updateHandler update =
-  do
-    case update of
-      Message
-        { message =
-            TT.Msg
-              { TT.metadata =
-                  TT.MMetadata
-                    { TT.from = Just TT.User {TT.userId = userTgId},
-                      TT.chat = TT.Chat {TT.chatId = chatTgId}
-                    },
-                TT.content = TT.TextM {TT.text = text}
-              }
-        }
-          | chatTgId < 0 -> createNote (Note {userTgId, chatTgId, count = T.length text})
-          | chatTgId == userTgId -> void $ safeHandleDirectMessage userTgId text
-      -- TT.BC {TT.command} -> undefined
-      _ -> liftIO $ print update
+updateHandler :: (MonadReader Config m, MonadLogger m, MonadIO m) => Update -> m ()
+updateHandler Message {message} = handleMessage message
+updateHandler update = liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text
 -- showMsg (RealUpdate Message {message = Msg {metadata = MMetadata {from}, content = TextM {text}}}) =
