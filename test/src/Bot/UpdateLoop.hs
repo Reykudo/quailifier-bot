@@ -2,31 +2,24 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE EmptyDataDeriving #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 
-module Bot.Client where
+module Bot.UpdateLoop where
 
 import Config (Config (Config, configTgMaxHandlers, configToken))
 import Control.Applicative (Applicative (pure), (<|>))
 import Control.Concurrent (forkIO, newChan)
 import Control.Concurrent.Chan
 import Control.Concurrent.MVar
-import Control.Exception (SomeException (SomeException), throw, throwIO)
+import Control.Exception (SomeException (SomeException), throwIO)
 import Control.Monad (join)
 import Control.Monad.Cont (forever, replicateM_)
-import Control.Monad.Error.Class (MonadError (catchError), liftEither)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.RWS (MonadReader (ask))
-import Control.Monad.Reader (ReaderT (runReaderT))
 import qualified Control.Retry as Retry
 import qualified Data.Aeson as A
 import Data.Aeson.Types (Parser, (.:))
@@ -62,9 +55,7 @@ import Web.Telegram.API
     Token,
   )
 import qualified Web.Telegram.API as WTA
-  ( GetChat,
-    GetChatMember,
-    GetMe,
+  ( GetMe,
     GetUpdates,
     SendMessage,
     Token (..),
@@ -83,7 +74,6 @@ import Web.Telegram.API.Sending.Data
   )
 import Web.Telegram.Types
   ( Chat (Chat, chatId),
-    ChatMember,
     Message (..),
     MessageContent (TextM, text),
     MessageMetadata (MMetadata, chat),
@@ -109,54 +99,31 @@ import Web.Telegram.Types.Update
       ),
   )
 
-type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat
+type Routes = WTA.GetUpdates
 
-getUpdateProxy = Proxy @WTA.GetUpdates
-
-methodsProxy = Proxy @Routes
-
-cfg :: SC.BaseUrl
-cfg =
-  ( SC.BaseUrl
-      { SC.baseUrlScheme = SC.Http,
-        SC.baseUrlHost = "api.telegram.org",
-        SC.baseUrlPort = 80,
-        SC.baseUrlPath = ""
-      }
-  )
-
-getUpdates :: (MonadIO m) => Token -> Polling -> m (ReqResult [Update])
+getUpdates :: Token -> Polling -> IO (ReqResult [Update])
 getUpdates =
   SC.hoistClient
-    getUpdateProxy
-    ( \c -> do
-        response <- runReaderT (handleClient c) cfg
-        either (error . show) pure response
-    )
-    (SC.client getUpdateProxy)
-
--- sendMessage :: (MonadIO m) => Token -> SMessage -> m (ReqResult Message)
--- getChatMember :: (MonadIO m) => (Token -> ChatId -> Int -> m (ReqResult ChatMember))
-sendMessage :<|> getChatMember :<|> getChat = mainClient
-
--- mainClient :: (MonadIO m) => ((Token -> SMessage -> m (ReqResult Message)) :<|> (Token -> ChatId -> Int -> m (ReqResult ChatMember)))
-mainClient =
-  SC.hoistClient
     (Proxy :: Proxy Routes)
-    ( \c -> do
-        response <- runReaderT (handleClient c) cfg
-        either (error . show) pure response
-    )
+    handleClient
     (SC.client (Proxy :: Proxy Routes))
 
-handleClient :: (MonadIO m, MonadReader SC.BaseUrl m) => SC.ClientM b -> m (Either SC.ClientError b)
+handleClient :: SC.ClientM b -> IO b
 handleClient clientM = do
   manager <- newTlsManager
-  clientCfg <- ask
-  let clientEnv = SC.mkClientEnv manager clientCfg
-  liftIO $
+  let clientEnv =
+        SC.mkClientEnv
+          manager
+          ( SC.BaseUrl
+              { SC.baseUrlScheme = SC.Http,
+                SC.baseUrlHost = "api.telegram.org",
+                SC.baseUrlPort = 80,
+                SC.baseUrlPath = ""
+              }
+          )
+  eResponse <-
     Retry.retrying
-      (Retry.limitRetries 5)
+      (Retry.limitRetries 999999)
       ( \status response -> do
           TIO.putStrLn $ "status " <> T.pack (show status)
           case response of
@@ -170,14 +137,69 @@ handleClient clientM = do
       )
       (const $ SC.runClientM clientM clientEnv)
 
-eternalRetry :: (MonadIO m, MonadReader SC.BaseUrl m) => SC.ClientM b -> m (Either T.Text b)
-eternalRetry clientM = do
-  manager <- newTlsManager
-  clientCfg <- ask
-  let clientEnv = SC.mkClientEnv manager clientCfg
-  response <- liftIO $ SC.runClientM clientM clientEnv
-  case response of
-    Right b -> pure $ Right b
-    Left e -> case e of
-      SC.DecodeFailure t _ -> pure $ liftEither $ Left t
-      _ -> eternalRetry clientM
+  either throwIO pure eResponse
+
+-- outputQueueHandler :: Chan (Maybe Text) -> IO ()
+-- outputQueueHandler queue =
+--   forever
+--     ( do
+--         out <- readChan queue
+--         case out of
+--           Just t -> putStrLn t
+--           _ -> pure ()
+--     )
+
+-- outputExecutor :: Chan (IO ()) -> IO ()
+-- outputExecutor queue =
+--   forever
+--     ( -- print "qwe"
+--       join $ readChan queue
+--     )
+
+getUpdateId :: Update -> Maybe Int64
+getUpdateId update = case update of
+  Message {updateId} -> Just updateId
+  EditedMessage {updateId} -> Just updateId
+  ChannelPost {updateId} -> Just updateId
+  CallbackQuery {updateId} -> Just updateId
+  ChosenInlineResult {updateId} -> Just updateId
+  InlineQuery {updateId} -> Just updateId
+  EditedChannelPost {updateId} -> Just updateId
+  ShippingQuery {updateId} -> Just updateId
+  PreCheckoutQuery {updateId} -> Just updateId
+  PollUpdate {updateId} -> Just updateId
+  Unknown {updateId} -> Just updateId
+
+updateLoop :: Config -> (Update -> IO ()) -> IO ()
+updateLoop cfg handle = do
+  let token = configToken cfg
+  (WTA.Token tokenStr) <- pure token
+  -- putStrLn $ "Program start with token:" <> tokenStr
+  let maxThreads = configTgMaxHandlers cfg
+  -- resChannel <- newChan @(Chan ())
+  threadsCount <- newChan
+  currentOffset <- newMVar (Nothing @Int64)
+  -- forkIO $ outputExecutor resChannel
+  -- mainLoopSync <- newMVar ()
+  let threadHandler = \u ->
+        ( do
+            handle u
+            writeChan threadsCount ()
+        )
+
+  forever
+    ( do
+        -- putStrLn "Loop start"
+        offset <- takeMVar currentOffset
+        let newOffset = (+ 1) <$> offset
+        -- putStrLn $ "newOffset: " <> pack (show offset)
+
+        Ok res <- getUpdates token (Polling {offset = newOffset, limit = Just maxThreads, allowedUpdates = Nothing, timeout = Just 500})
+        -- putStrLn $ pack $ show res
+
+        traverse_ (forkIO . threadHandler) res
+
+        putMVar currentOffset $ foldl' (flip (max . getUpdateId)) Nothing res
+
+        replicateM_ (length res) $ readChan threadsCount
+    )

@@ -149,7 +149,6 @@ test-suite quailifier-bot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Setup
       Paths_quailifier_bot
   hs-source-dirs:
       test
