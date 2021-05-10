@@ -58,7 +58,7 @@ import Web.Telegram.API (Token (Token))
 newtype AppT m a = AppT
   { runAppT :: ReaderT Config (ExceptT ClientError m) a
   }
-  deriving
+  deriving newtype
     ( Functor,
       Applicative,
       Monad,

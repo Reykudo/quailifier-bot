@@ -26,10 +26,12 @@ source-repository head
 library
   exposed-modules:
       Bot.Client
-      Bot.Handler.ChatMessage
-      Bot.Handler.Common
-      Bot.Handler.DirectMessage
-      Bot.Handler.Message
+      Bot.Decision.Decision
+      Bot.Exception
+      Bot.Message.ChatMessage
+      Bot.Message.Common
+      Bot.Message.DirectMessage
+      Bot.Message.Message
       Bot.Models
       Bot.UpdateHandler
       Bot.UpdateLoop
@@ -149,7 +151,6 @@ test-suite quailifier-bot-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Setup
       Paths_quailifier_bot
   hs-source-dirs:
       test

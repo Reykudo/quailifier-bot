@@ -9,14 +9,15 @@
 
 module Bot.UpdateHandler where
 
-import Bot.Handler.Message (handleMessage)
+import Bot.Message.Message (handleMessage)
 import qualified Bot.Models as MDLS
 import Config (AppT (AppT), Config)
 import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO))
 import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.RWS (MonadReader)
-import Control.Monad.Reader (ReaderT (ReaderT, runReaderT))
+import Control.Monad.Reader (ReaderT (ReaderT, runReaderT), ask)
+import Control.Monad.Trans (lift)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Database.Persist ((=.))
@@ -24,9 +25,12 @@ import Database.Persist.Postgresql (Entity (entityKey), PersistUniqueWrite (upse
 import qualified Web.Telegram.Types as TT
 import Web.Telegram.Types.Update
 
+runReaderTIn :: MonadReader r m => ReaderT r m b -> m b
+runReaderTIn m = ask >>= runReaderT m
+
 --   return $ fromSqlKey newUser
 updateHandler :: (MonadReader Config m, MonadLogger m, MonadIO m) => Update -> m ()
-updateHandler Message {message} = handleMessage message
+updateHandler Message {message} = runReaderTIn $ handleMessage message
 updateHandler update = liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text

@@ -24,6 +24,7 @@ import Control.Monad.Reader (MonadIO, MonadReader, asks, liftIO)
 import Data.Aeson (ToJSON, Value (Bool))
 import Data.Int (Int64)
 import Data.Text (Text)
+import Data.Time
 import Database.Persist (Entity (Entity))
 import Database.Persist.Sql (SqlPersistT, runMigration, runSqlPool)
 import Database.Persist.TH
@@ -58,6 +59,12 @@ share
         
         UniqueRating user chat
         deriving Show Eq 
+
+    Decision json
+        initUser UserId
+        initDate UTCTime
+        chat ChatId
+        targetUser UserId
     |]
 
 doMigrations :: SqlPersistT IO ()

@@ -20,10 +20,14 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
-module Bot.Handler.DirectMessage where
+-- {-# LANGUAGE UndecidableInstances #-}
+-- {-# LANGUAGE UndecidableInstances #-}
+
+module Bot.Message.DirectMessage where
 
 import Bot.Client (getChat, sendMessage)
-import Bot.Handler.Common
+import Bot.Exception (BotExceptT, BotException (NotMatched))
+import Bot.Message.Common
 import qualified Bot.Models as MD
 import Config (AppT, Config (Config, configToken))
 import Control.Applicative (Alternative ((<|>)), liftA)
@@ -32,10 +36,11 @@ import Control.Exception (Exception, catch, throw)
 import Control.Exception.Safe (MonadThrow, SomeException (SomeException), throwIO, throwM, try)
 import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift))
-import Control.Monad.Except (MonadError (catchError, throwError), liftEither, runExceptT)
+import Control.Monad.Except (Except, ExceptT, MonadError (catchError, throwError), liftEither, runExceptT)
 import Control.Monad.Logger (MonadLogger, logDebugNS, logErrorN)
 import Control.Monad.RWS (MonadIO, MonadReader (ask), MonadWriter, guard)
 import Control.Monad.Reader (ReaderT (ReaderT, runReaderT), asks)
+import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Control.Parallel.Strategies (evalTraversable, rpar, runEval, runEvalIO, withStrategy)
 import Data.Coerce (coerce)
@@ -63,8 +68,6 @@ import Web.Telegram.Types.Update (ReqResult (Ok))
 data DMCommand = Start | Unknown | Subscribe | Unscribe | GetTop | GetMe
   deriving (Show, Eq)
 
-data DMException = UserNotFound deriving (Show, Eq, Exception)
-
 dmFromText :: (Eq a, IsString a) => a -> DMCommand
 dmFromText text = case text of
   "/start" -> Start
@@ -78,25 +81,14 @@ replyMsg = \case
   Start -> Just "hi"
   _ -> Nothing
 
-errorText :: DMException -> Text
-errorText = \case
-  UserNotFound -> "Not Found"
-
-runDbAdapted :: (MessageHandlerReader m, MonadIO m) => SqlPersistT IO b -> m b
-runDbAdapted query = do
-  cfg <- asks config
-  runReaderT (MD.runDb query) cfg
-
-handleDirectMessage' :: (MessageHandlerReader m, MonadLogger m, MonadIO m, MonadError DMException m) => MaybeT m ()
-handleDirectMessage' = do
+handleDirectMessage :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
+handleDirectMessage = do
   cfg@Config {configToken} <- asks config
   Just TG.User {userId = userTgIdV} <- asks $ TG.from . TG.metadata . message
 
   logDebugNS "web" "handle comand"
-  user' <- runDbAdapted $ selectFirst [MD.UserTgId DP.==. userTgIdV] []
-  userEntity@Entity {entityVal} <- case user' of
-    Nothing -> throwError UserNotFound
-    Just r -> pure r
+  user' <- runDbInMsgEnv $ selectFirst [MD.UserTgId DP.==. userTgIdV] []
+  Just userEntity@Entity {entityVal} <- pure user'
   -- TG.Msg {} <- asks message
   TG.TextM {text} <- asks $ TG.content . message
   reply userEntity $ dmFromText text
@@ -104,15 +96,17 @@ handleDirectMessage' = do
   liftIO $ print $ show entityVal
   pure ()
 
-handleDirectMessage :: (MessageHandlerReader m, MonadLogger m, MonadIO m) => MaybeT m ()
-handleDirectMessage = do
-  v <- runExceptT $ runMaybeT handleDirectMessage'
-  case v of
-    Right r -> pure ()
-    Left e -> do
-      logErrorN $ T.pack $ show e
-  guard $ isRight v
-  pure ()
+-- handleDirectMessage :: (MessageHandlerReader m, MonadLogger m, MonadIO m) => MaybeT m ()
+-- handleDirectMessage = do
+--   -- a <-
+--   v <- runMaybeT handleDirectMessage'
+
+--   -- ExceptT $ pure a
+--   case v of
+--     Right r -> pure r
+--     Left e -> do
+--       logErrorN $ T.pack e
+--       fail e
 
 -- reply :: (MonadLogger m, MonadReader Config m, MonadIO m) => ChatId -> DMCommand -> m ()
 -- reply :: Entity MD.User -> DMCommand -> m ()
@@ -135,62 +129,47 @@ selectChatMatchedWith userId = do
       S.where_ ((rating ^. MD.RatingChat) S.==. chat S.^. MD.ChatId)
       pure chat
 
-reply :: (MessageHandlerReader m, MonadIO m) => Entity MD.User -> DMCommand -> m ()
+reply :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => Entity MD.User -> DMCommand -> m ()
 reply user command = do
   configToken <- asks $ configToken . config
   TG.Msg {metadata = TG.MMetadata {messageId}} <- asks message
-  let sendBack = \text ->
-        liftIO $
-          sendMessage
-            configToken
-            ( SMsg
-                { chatId = ChatId $ MD.userTgId $ entityVal user,
-                  text = text,
-                  disableWebPagePreview = Nothing,
-                  parseMode = Nothing,
-                  disableNotification = Nothing,
-                  replyToMessageId = Just $ fromIntegral messageId,
-                  replyMarkup = Nothing
-                }
-            )
 
   case command of
     GetMe -> do
       let Entity {entityKey = userId} = user
-      ratings <- runDbAdapted $ DP.selectList [MD.RatingUser DP.==. userId] []
-      chats <- runDbAdapted $ selectChatMatchedWith userId
-      --  TODO пересмотреть параллельный запуск getChat
+      ratings <- runDbInMsgEnv $ DP.selectList [MD.RatingUser DP.==. userId] []
+      chats <- runDbInMsgEnv $ selectChatMatchedWith userId
       tgChats <- liftIO $ mapConcurrently (getChat configToken . ChatId . MD.chatTgId . entityVal) chats
 
-      sendBack $ intercalate "\n" $ makeReport <$> zip ratings tgChats
+      replyBack $ intercalate "\n" $ makeReport <$> zip ratings tgChats
       pure ()
-    _ -> void $ sendBack "Not implemented"
+    _ -> throwError NotMatched
   where
     makeReport (Entity _ MD.Rating {MD.ratingCount = ratingCount}, Ok TG.Chat {chatId, title}) =
       T.pack $ "Rating: " <> show ratingCount <> " in chat: " <> T.unpack (fromMaybe " - " title) <> " (" <> show chatId <> ") "
 
--- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError DMException m) => Text -> DMException -> m ()
-reportException :: (MonadLogger m, MessageHandlerReader m, MonadIO m) => DMException -> MaybeT m ()
-reportException e = do
-  Config {configToken} <- asks config
+-- -- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError BotException m) => Text -> BotException -> m ()
+-- reportException :: (MonadLogger m, MessageHandlerReader m, MonadIO m) => BotException -> BotExceptT m ()
+-- reportException e = do
+--   Config {configToken} <- asks config
 
-  Just TG.User {TG.userId = userId} <- asks $ TG.from . TG.metadata . message
+--   Just TG.User {TG.userId = userId} <- asks $ TG.from . TG.metadata . message
 
-  liftIO $
-    sendMessage
-      configToken
-      ( SMsg
-          { chatId = ChatId userId,
-            text = errorText e,
-            disableWebPagePreview = Nothing,
-            parseMode = Nothing,
-            disableNotification = Nothing,
-            replyToMessageId = Nothing,
-            replyMarkup = Nothing
-          }
-      )
+--   liftIO $
+--     sendMessage
+--       configToken
+--       ( SMsg
+--           { chatId = ChatId userId,
+--             text = errorText e,
+--             disableWebPagePreview = Nothing,
+--             parseMode = Nothing,
+--             disableNotification = Nothing,
+--             replyToMessageId = Nothing,
+--             replyMarkup = Nothing
+--           }
+--       )
 
-  pure ()
+--   pure ()
 
 -- someMethod :: (MonadIO m, MonadError String m) => m ()
 -- someMethod = do
