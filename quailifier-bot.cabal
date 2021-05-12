@@ -26,9 +26,11 @@ source-repository head
 library
   exposed-modules:
       Bot.Client
+      Bot.DbModels
       Bot.Decision.Decision
       Bot.Exception
       Bot.Message.ChatMessage
+      Bot.Message.Check
       Bot.Message.Common
       Bot.Message.DirectMessage
       Bot.Message.Message
@@ -65,6 +67,7 @@ library
     , monad-control
     , monad-logger
     , mtl
+    , once
     , opaleye
     , parallel
     , persistent >=2.12.1.1
@@ -120,6 +123,7 @@ executable quailifier-bot-exe
     , monad-control
     , monad-logger
     , mtl
+    , once
     , opaleye
     , parallel
     , persistent >=2.12.1.1
@@ -177,6 +181,7 @@ test-suite quailifier-bot-test
     , monad-control
     , monad-logger
     , mtl
+    , once
     , opaleye
     , parallel
     , persistent >=2.12.1.1

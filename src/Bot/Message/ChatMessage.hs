@@ -2,23 +2,26 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StrictData #-}
 
 module Bot.Message.ChatMessage where
 
+import qualified Bot.DbModels as DB
 import Bot.Exception (BotExceptT, BotException)
 import Bot.Message.Common
-import qualified Bot.Models as MDLS
+import Bot.Models (DecisionStatus (Process))
 import Config (AppT (AppT), Config)
-import Control.Monad.Cont (MonadIO)
+import Control.Monad.Cont (MonadIO (liftIO))
 import Control.Monad.Except (MonadError)
 import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.Reader (MonadReader (ask), ReaderT (runReaderT), asks)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
 import Data.Int (Int64)
 import qualified Data.Text as T
+import Data.Time (getCurrentTime)
 import Database.Persist
 import qualified Web.Telegram.Types as TG
 
@@ -32,23 +35,46 @@ handleChatMessage = do
   let count = T.length text
   runDbInMsgEnv
     ( do
-        user <- upsertBy (MDLS.UniqueUserTgId userTgId) (MDLS.User userTgId False) [MDLS.UserTgId =. userTgId]
-        chat <- upsertBy (MDLS.UniqueChatTgId chatTgId) (MDLS.Chat chatTgId) [MDLS.ChatTgId =. chatTgId]
+        user <- upsertBy (DB.UniqueUserTgId userTgId) (DB.User userTgId False) [DB.UserTgId =. userTgId]
+        chat <- upsertBy (DB.UniqueChatTgId chatTgId) (DB.Chat chatTgId) [DB.ChatTgId =. chatTgId]
         ratingEntity <-
           upsertBy
-            ( MDLS.UniqueRating
+            ( DB.UniqueRating
                 (entityKey user)
                 (entityKey chat)
             )
-            ( MDLS.Rating
-                { MDLS.ratingCount = count,
-                  MDLS.ratingUser = entityKey user,
-                  MDLS.ratingChat = entityKey chat
+            ( DB.Rating
+                { DB.ratingCount = count,
+                  DB.ratingUser = entityKey user,
+                  DB.ratingChat = entityKey chat
                 }
             )
-            [MDLS.RatingCount +=. count]
+            [DB.RatingCount +=. count]
 
         pure ()
     )
 
   pure ()
+
+handleChatMessageCommand :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
+handleChatMessageCommand = do
+  TG.MMetadata {from = (Just TG.User {userId = userTgId}), replyToMessage} <- asks $ TG.metadata . message
+  Just TG.Msg {metadata = TG.MMetadata {from = Just TG.User {userId = targetUserTgId}, chat = TG.Chat {chatId = chatTgId}}} <- pure replyToMessage
+
+  decisionInitDate <- liftIO getCurrentTime
+  e <- runDbInMsgEnv $ do
+    Just initUser <- getBy $ DB.UniqueUserTgId userTgId
+    Just targetUser <- getBy $ DB.UniqueUserTgId targetUserTgId
+    Just chat <- getBy $ DB.UniqueChatTgId chatTgId
+    let entity =
+          DB.Decision
+            { decisionInitUser = entityKey initUser,
+              decisionTargetUser = entityKey targetUser,
+              decisionInitDate,
+              decisionChat = entityKey chat,
+              decisionStatus = Process
+            }
+    liftIO $ print entity
+    insert entity
+
+  replyBack $ "Success" <> T.pack (show e)

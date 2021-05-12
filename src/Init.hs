@@ -9,7 +9,7 @@ module Init where
 -- import Api (app)
 -- import Api.User (generateJavaScript)
 
-import Bot.Models (doMigrations)
+import qualified Bot.DbModels as DB
 import Bot.UpdateHandler (updateHandler)
 import Bot.UpdateLoop (updateLoop)
 import Config (App, AppT (runAppT), Config (..), Environment (..), makePool, setLogger)
@@ -68,7 +68,7 @@ initialize cfg = do
         (const $ say "migrations complete")
         ( const $ do
             say "actually running migrations"
-            runSqlPool doMigrations (configPool cfg) `catch` \(SomeException e) -> do
+            runSqlPool DB.doMigrations (configPool cfg) `catch` \(SomeException e) -> do
               say $
                 mconcat
                   [ "exception in doMigrations, type: ",

@@ -10,11 +10,14 @@
 
 module Bot.Message.Message where
 
+import qualified Bot.DbModels as DB
 import Bot.Exception
-import Bot.Message.ChatMessage (handleChatMessage)
+import Bot.Message.ChatMessage (handleChatMessage, handleChatMessageCommand)
+-- import Control.Monad.Trans.Reader (ask)
+
+import Bot.Message.Check (isCommand)
 import Bot.Message.Common (MessageEnvT (runMessageEnvT), MessageHandlerEnv (MessageHandlerEnv, config, message), replyBack, runMessageHandlerReader)
 import Bot.Message.DirectMessage (handleDirectMessage)
-import Bot.Models (Chat (chatTgId), User (userTgId))
 import Config (Config (Config))
 import Control.Applicative (Alternative ((<|>)))
 import Control.Exception (throw)
@@ -24,8 +27,6 @@ import Control.Monad.Except (ExceptT (ExceptT), MonadError (throwError), mapExce
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Reader (MonadReader, ReaderT (ReaderT, runReaderT), mapReader, mapReaderT, withReaderT)
--- import Control.Monad.Trans.Reader (ask)
-
 import Control.Monad.Reader.Class (ask)
 import Control.Monad.Trans
 import Control.Monad.Trans.Maybe
@@ -36,9 +37,6 @@ import qualified Web.Telegram.Types as TT
 
 liftMaybe :: Applicative m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
-
-runReaderTInMonadReader :: (MonadReader r m) => m b -> ReaderT r m b
-runReaderTInMonadReader = lift
 
 handleMessage :: (MonadLogger m, MonadIO m, MonadReader Config m) => TT.Message -> m ()
 handleMessage
@@ -55,13 +53,22 @@ handleMessage
     let withCondition condition m = (do if condition then pure () else throwError NotMatched; m)
     let isChatMessage = chatTgId < 0
     let isDirectMessage = chatTgId == userTgId
-    let runIn m = runExceptT (runReaderT (runMessageEnvT m) (MessageHandlerEnv {config, message}))
-    res <- runIn $ asum [withCondition isChatMessage handleChatMessage, withCondition isDirectMessage handleDirectMessage]
-    liftIO $ print res
-    if isDirectMessage
-      then case res of
-        Left e -> runIn $ replyBack $ makeErrorReport e
-        Right r -> pure $ pure ()
-      else pure $ pure ()
+
+    flip runReaderT (MessageHandlerEnv {config, message}) $ do
+      isCommand <- isCommand
+      liftIO $ putStrLn $ "isCommand" <> show isCommand
+      res <-
+        runExceptT $
+          asum
+            [ withCondition (isChatMessage && isCommand) handleChatMessageCommand,
+              withCondition (isChatMessage && not isCommand) handleChatMessage,
+              withCondition (isDirectMessage && isCommand) handleDirectMessage
+            ]
+      liftIO $ print res
+      if isDirectMessage || isCommand
+        then case res of
+          Left e -> runExceptT $ replyBack $ makeErrorReport e
+          Right r -> pure $ pure ()
+        else pure $ pure ()
     pure ()
 handleMessage m = liftIO $ putStr $ show m <> "\n\n"

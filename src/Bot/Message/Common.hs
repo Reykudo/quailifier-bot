@@ -17,8 +17,8 @@
 module Bot.Message.Common where
 
 import Bot.Client (sendMessage)
+import qualified Bot.DbModels as BM
 import Bot.Exception
-import qualified Bot.Models as BM
 import Config (Config (Config, configToken))
 -- import Control.Monad.Trans.Reader (ReaderT (ReaderT, runReaderT))
 
@@ -72,18 +72,19 @@ runDbInMsgEnv q = skipMHE $ BM.runDb q
 replyBack :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => T.Text -> m ()
 replyBack e = do
   configToken <- asks $ configToken . config
-  TG.Msg {metadata = TG.MMetadata {messageId, from = Just TG.User {userId}}} <- asks message
+  TG.Msg {metadata = TG.MMetadata {messageId, from = Just TG.User {userId}, chat = TG.Chat {chatId}}} <- asks message
   let sendBack = \text ->
         liftIO $
           sendMessage
             configToken
             ( TGS.SMsg
-                { chatId = ChatId userId,
+                { chatId = ChatId chatId,
                   text = text,
                   disableWebPagePreview = Nothing,
                   parseMode = Nothing,
                   disableNotification = Nothing,
                   replyToMessageId = Just $ fromIntegral messageId,
+                  -- replyToMessageId = Nothing,
                   replyMarkup = Nothing
                 }
             )

@@ -67,6 +67,7 @@ dependencies:
   - async
   # - wai-middleware-metrics
   - warp
+  - once
 
 library:
   source-dirs: src

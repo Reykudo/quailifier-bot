@@ -65,6 +65,7 @@ import qualified Web.Telegram.API as WTA
   ( GetChat,
     GetChatMember,
     GetMe,
+    GetMyCommands,
     GetUpdates,
     SendMessage,
     Token (..),
@@ -109,7 +110,7 @@ import Web.Telegram.Types.Update
       ),
   )
 
-type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat
+type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat :<|> WTA.GetMyCommands
 
 getUpdateProxy = Proxy @WTA.GetUpdates
 
@@ -137,7 +138,7 @@ getUpdates =
 
 -- sendMessage :: (MonadIO m) => Token -> SMessage -> m (ReqResult Message)
 -- getChatMember :: (MonadIO m) => (Token -> ChatId -> Int -> m (ReqResult ChatMember))
-sendMessage :<|> getChatMember :<|> getChat = mainClient
+sendMessage :<|> getChatMember :<|> getChat :<|> getMyCommands = mainClient
 
 -- mainClient :: (MonadIO m) => ((Token -> SMessage -> m (ReqResult Message)) :<|> (Token -> ChatId -> Int -> m (ReqResult ChatMember)))
 mainClient =

@@ -26,9 +26,9 @@
 module Bot.Message.DirectMessage where
 
 import Bot.Client (getChat, sendMessage)
+import qualified Bot.DbModels as DB
 import Bot.Exception (BotExceptT, BotException (NotMatched))
 import Bot.Message.Common
-import qualified Bot.Models as MD
 import Config (AppT, Config (Config, configToken))
 import Control.Applicative (Alternative ((<|>)), liftA)
 import Control.Concurrent.Async (mapConcurrently)
@@ -87,7 +87,7 @@ handleDirectMessage = do
   Just TG.User {userId = userTgIdV} <- asks $ TG.from . TG.metadata . message
 
   logDebugNS "web" "handle comand"
-  user' <- runDbInMsgEnv $ selectFirst [MD.UserTgId DP.==. userTgIdV] []
+  user' <- runDbInMsgEnv $ selectFirst [DB.UserTgId DP.==. userTgIdV] []
   Just userEntity@Entity {entityVal} <- pure user'
   -- TG.Msg {} <- asks message
   TG.TextM {text} <- asks $ TG.content . message
@@ -109,27 +109,27 @@ handleDirectMessage = do
 --       fail e
 
 -- reply :: (MonadLogger m, MonadReader Config m, MonadIO m) => ChatId -> DMCommand -> m ()
--- reply :: Entity MD.User -> DMCommand -> m ()
+-- reply :: Entity DB.User -> DMCommand -> m ()
 
--- reply :: MonadIO m => Entity MD.User -> DMCommand -> ReaderT Config m ()
--- reply :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend) => Entity MD.User -> p -> ReaderT Config m ()
--- reply :: MonadReader Config m => Entity MD.User -> p -> m ()2
+-- reply :: MonadIO m => Entity DB.User -> DMCommand -> ReaderT Config m ()
+-- reply :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend) => Entity DB.User -> p -> ReaderT Config m ()
+-- reply :: MonadReader Config m => Entity DB.User -> p -> m ()2
 selectChatMatchedWith ::
   ( MonadIO m,
     BackendCompatible SqlBackend backend,
     PersistQueryRead backend,
     PersistUniqueRead backend
   ) =>
-  Key MD.User ->
-  ReaderT backend m [Entity MD.Chat]
+  Key DB.User ->
+  ReaderT backend m [Entity DB.Chat]
 selectChatMatchedWith userId = do
   S.select $
     S.distinct $ S.from \(chat, rating) -> do
-      S.where_ ((rating ^. MD.RatingUser) S.==. S.val userId)
-      S.where_ ((rating ^. MD.RatingChat) S.==. chat S.^. MD.ChatId)
+      S.where_ ((rating ^. DB.RatingUser) S.==. S.val userId)
+      S.where_ ((rating ^. DB.RatingChat) S.==. chat S.^. DB.ChatId)
       pure chat
 
-reply :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => Entity MD.User -> DMCommand -> m ()
+reply :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => Entity DB.User -> DMCommand -> m ()
 reply user command = do
   configToken <- asks $ configToken . config
   TG.Msg {metadata = TG.MMetadata {messageId}} <- asks message
@@ -137,15 +137,15 @@ reply user command = do
   case command of
     GetMe -> do
       let Entity {entityKey = userId} = user
-      ratings <- runDbInMsgEnv $ DP.selectList [MD.RatingUser DP.==. userId] []
+      ratings <- runDbInMsgEnv $ DP.selectList [DB.RatingUser DP.==. userId] []
       chats <- runDbInMsgEnv $ selectChatMatchedWith userId
-      tgChats <- liftIO $ mapConcurrently (getChat configToken . ChatId . MD.chatTgId . entityVal) chats
+      tgChats <- liftIO $ mapConcurrently (getChat configToken . ChatId . DB.chatTgId . entityVal) chats
 
       replyBack $ intercalate "\n" $ makeReport <$> zip ratings tgChats
       pure ()
     _ -> throwError NotMatched
   where
-    makeReport (Entity _ MD.Rating {MD.ratingCount = ratingCount}, Ok TG.Chat {chatId, title}) =
+    makeReport (Entity _ DB.Rating {DB.ratingCount = ratingCount}, Ok TG.Chat {chatId, title}) =
       T.pack $ "Rating: " <> show ratingCount <> " in chat: " <> T.unpack (fromMaybe " - " title) <> " (" <> show chatId <> ") "
 
 -- -- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError BotException m) => Text -> BotException -> m ()
