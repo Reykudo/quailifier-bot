@@ -10,6 +10,11 @@ module Init where
 -- import Api.User (generateJavaScript)
 
 import qualified Bot.DbModels as DB
+-- import qualified Control.Monad.Metrics as M
+
+-- import Network.Wai.Metrics (metrics, registerWaiMetrics)
+
+import Bot.Decision.Decision (startSheduler)
 import Bot.UpdateHandler (updateHandler)
 import Bot.UpdateLoop (updateLoop)
 import Config (App, AppT (runAppT), Config (..), Environment (..), makePool, setLogger)
@@ -17,7 +22,6 @@ import Control.Concurrent (killThread)
 import Control.Exception.Safe
 import Control.Monad.Except (MonadTrans (lift), runExceptT)
 import Control.Monad.Logger
--- import qualified Control.Monad.Metrics as M
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Monoid
 import qualified Data.Pool as Pool
@@ -32,7 +36,6 @@ import Lens.Micro ((^.))
 import Logger (defaultLogEnv)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
--- import Network.Wai.Metrics (metrics, registerWaiMetrics)
 import Safe (readMay)
 import Say
 import System.Environment (lookupEnv)
@@ -82,6 +85,8 @@ initialize cfg = do
         )
     say "making app"
     let withRunInIO = \runInIO -> do
+          say "start sheduler"
+          runInIO $ startSheduler
           updateLoop cfg (runInIO . updateHandler)
     withRunInIO
       ( \appT -> do
@@ -97,7 +102,7 @@ withConfig action = do
   say $ "on port:" <> tshow port
   env <- lookupSetting "ENV" Development
   token <- lookupSetting "TG_BOT_QUALIFIER_TOKEN" ""
-  maxHandlers <- lookupSetting "MAX_HANDLERS" 20
+  maxHandlers <- lookupSetting "MAX_HANDLERS" 240
   say $ "on env: " <> tshow env
 
   bracket defaultLogEnv (\x -> say "closing katip scribes" >> Katip.closeScribes x) \logEnv -> do
@@ -107,11 +112,6 @@ withConfig action = do
     liftIO $
       bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do
         say "forked ekg server"
-        let store = serverMetricStore ekgServer
-        -- waiMetrics <- registerWaiMetrics store `onException` say "exception in registerWaiMetrics"
-        -- say "registered wai metrics"
-        -- metr <- M.initializeWith store
-        -- say "got metrics"
         action
           Config
             { configPool = pool,
@@ -124,7 +124,6 @@ withConfig action = do
               configTgMaxHandlers = maxHandlers
             }
 
--- | Takes care of cleaning up 'Config' resources
 shutdownApp :: Config -> IO ()
 shutdownApp cfg = do
   Katip.closeScribes (configLogEnv cfg)

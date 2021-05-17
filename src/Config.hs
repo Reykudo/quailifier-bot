@@ -13,17 +13,20 @@ module Config where
 
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 
-import Control.Concurrent (ThreadId)
-import Control.Exception.Safe (MonadCatch, throwIO)
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+import Control.Concurrent (ThreadId, forkIO)
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 
-import Control.Monad (liftM)
-import Control.Monad.Except (ExceptT, MonadError)
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+import qualified Control.Concurrent.Forkable as F (ForkableMonad (forkIO))
+import Control.Exception.Safe (MonadCatch, throw, throwIO)
+import Control.Monad (liftM, void)
+import Control.Monad.Except (ExceptT, MonadError, runExceptT)
 import Control.Monad.IO.Class
 import Control.Monad.Logger (LogLevel (LevelDebug, LevelError, LevelInfo, LevelOther, LevelWarn), MonadLogger (..), MonadLoggerIO)
 import qualified Control.Monad.Logger as FastLogger
 import Control.Monad.Logger.CallStack (MonadLoggerIO (askLoggerIO))
-import Control.Monad.Reader (MonadIO, MonadReader, ReaderT, asks)
+import Control.Monad.Reader (MonadIO, MonadReader (ask), ReaderT (runReaderT), asks)
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import qualified Data.ByteString.Char8 as BS
@@ -66,6 +69,14 @@ newtype AppT m a = AppT
       MonadError ClientError,
       MonadIO
     )
+
+instance F.ForkableMonad App where
+  forkIO m = do
+    r <- ask
+    liftIO $
+      forkIO $ do
+        v <- runExceptT $ runReaderT (runAppT m) r
+        void $ either throw pure v
 
 type App = AppT IO
 
@@ -184,7 +195,7 @@ makePool Production = do
 envPool :: Environment -> Int
 envPool Test = 1
 envPool Development = 1
-envPool Production = 8
+envPool Production = 64
 
 -- | A basic 'ConnectionString' for local/test development. Pass in either
 -- @""@ for 'Development' or @"test"@ for 'Test'.

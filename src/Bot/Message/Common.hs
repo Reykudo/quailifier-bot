@@ -31,10 +31,6 @@ import Control.Monad.Trans.Maybe (MaybeT (MaybeT))
 import Control.Monad.Trans.Reader hiding (ask, asks)
 import qualified Data.Text as T
 import Database.Persist.Postgresql (SqlPersistT)
-import Web.Telegram.API (ChatId (ChatId))
-import qualified Web.Telegram.API (ChatId)
-import qualified Web.Telegram.API.Sending.Data as TGS
-import qualified Web.Telegram.Types as TG
 
 data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: TG.Message}
 

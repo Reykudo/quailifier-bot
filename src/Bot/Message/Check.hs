@@ -10,6 +10,7 @@ import Bot.Client (getMyCommands)
 import Bot.Message.Common (MessageHandlerEnv (MessageHandlerEnv, config, message))
 import Config (Config (Config, configToken))
 import Control.Monad (guard)
+import Control.Monad.Cont (MonadTrans (lift))
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Reader (asks)
 import Control.Monad.Reader.Class (MonadReader)
@@ -34,3 +35,19 @@ isCommand = do
         guard $ any (\case TG.BC {command} -> isPrefixOf ("/" <> command) text) botCommands
         pure True
     _ -> pure False
+
+isDirectMessage :: (MonadIO m, MonadReader MessageHandlerEnv m) => m Bool
+isDirectMessage = do
+  msg <- asks message
+
+  (fromMaybe False <$>) $
+    runMaybeT $ do
+      let chatId = TG.chatId $ TG.chat $ TG.metadata msg
+      TG.User {userId} <- MaybeT . pure $ TG.from (TG.metadata msg)
+      pure $ chatId == userId
+
+isChatMessage :: (MonadIO m, MonadReader MessageHandlerEnv m) => m Bool
+isChatMessage = do
+  msg <- asks message
+  let chatId = TG.chatId $ TG.chat $ TG.metadata msg
+  pure $ chatId < 0

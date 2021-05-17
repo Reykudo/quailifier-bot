@@ -132,7 +132,7 @@ getUpdates =
     getUpdateProxy
     ( \c -> do
         response <- runReaderT (handleClient c) cfg
-        either (error . show) pure response
+        either throw pure response
     )
     (SC.client getUpdateProxy)
 
@@ -146,7 +146,7 @@ mainClient =
     (Proxy :: Proxy Routes)
     ( \c -> do
         response <- runReaderT (handleClient c) cfg
-        either (error . show) pure response
+        either (throw) pure response
     )
     (SC.client (Proxy :: Proxy Routes))
 

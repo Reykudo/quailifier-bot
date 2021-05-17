@@ -15,7 +15,11 @@ import Bot.Exception
 import Bot.Message.ChatMessage (handleChatMessage, handleChatMessageCommand)
 -- import Control.Monad.Trans.Reader (ask)
 
-import Bot.Message.Check (isCommand)
+-- import Control.Monad.Trans.Reader (ask)
+-- import Control.Monad.Trans.Reader (ask)
+
+-- import Control.Monad.Trans.Reader (ask)
+import Bot.Message.Check (isChatMessage, isCommand, isDirectMessage)
 import Bot.Message.Common (MessageEnvT (runMessageEnvT), MessageHandlerEnv (MessageHandlerEnv, config, message), replyBack, runMessageHandlerReader)
 import Bot.Message.DirectMessage (handleDirectMessage)
 import Config (Config (Config))
@@ -51,21 +55,22 @@ handleMessage
     config <- ask
 
     let withCondition condition m = (do if condition then pure () else throwError NotMatched; m)
-    let isChatMessage = chatTgId < 0
-    let isDirectMessage = chatTgId == userTgId
 
     flip runReaderT (MessageHandlerEnv {config, message}) $ do
-      isCommand <- isCommand
-      liftIO $ putStrLn $ "isCommand" <> show isCommand
+      isCommand' <- isCommand
+      isDirectMessage' <- isDirectMessage
+      isChatMessage' <- isChatMessage
+
+      liftIO $ putStrLn $ "isCommand" <> show isCommand'
       res <-
         runExceptT $
           asum
-            [ withCondition (isChatMessage && isCommand) handleChatMessageCommand,
-              withCondition (isChatMessage && not isCommand) handleChatMessage,
-              withCondition (isDirectMessage && isCommand) handleDirectMessage
+            [ withCondition (isChatMessage' && isCommand') handleChatMessageCommand,
+              withCondition (isChatMessage' && not isCommand') handleChatMessage,
+              withCondition (isDirectMessage' && isCommand') handleDirectMessage
             ]
       liftIO $ print res
-      if isDirectMessage || isCommand
+      if isDirectMessage' || isCommand'
         then case res of
           Left e -> runExceptT $ replyBack $ makeErrorReport e
           Right r -> pure $ pure ()

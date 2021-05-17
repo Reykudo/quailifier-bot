@@ -1,22 +1,42 @@
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Bot.Decision.Decision where
 
-import Control.Concurrent (ThreadId, forkIO, threadDelay)
+import qualified Bot.DbModels as BM
+import Bot.Models (DecisionStatus (Process))
+import Config (Config (Config))
+import Control.Concurrent.Forkable (ForkableMonad (forkIO), ThreadId, threadDelay)
 import Control.Monad (forever)
 import Control.Monad.Cont (MonadIO)
-import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.Reader
 import Data.Time (NominalDiffTime, getCurrentTime)
+import Database.Esqueleto
+import UnliftIO (UnliftIO (unliftIO))
 
-type JobId = ThreadId
+minuteMcS = 6000000
 
-type Job = IO
+allProcessedDecisions ::
+  ( MonadIO m,
+    BackendCompatible SqlBackend backend,
+    PersistQueryRead backend,
+    PersistUniqueRead backend
+  ) =>
+  ReaderT backend m [Entity BM.Decision]
+allProcessedDecisions = do
+  select $
+    distinct $ from \decision -> do
+      where_ $ (decision ^. BM.DecisionStatus) ==. val Process
+      pure decision
 
-minuteMcS = 60000000
-
-action :: MonadIO m => m ()
-action = do
+makeDecisions :: (MonadIO m, MonadReader Config m, ForkableMonad m) => m ()
+makeDecisions = do
+  v <- BM.runDb allProcessedDecisions
   pure ()
 
-startSheduler :: MonadIO m => m ThreadId
-startSheduler = (liftIO . forkIO . forever) $ do
-  threadDelay minuteMcS
-  action
+startSheduler :: (MonadIO m, MonadReader Config m, ForkableMonad m) => m ()
+startSheduler = void $
+  forkIO . forever $ do
+    makeDecisions
+    liftIO $ threadDelay minuteMcS
+    pure ()
