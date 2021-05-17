@@ -54,6 +54,9 @@ dependencies:
   - servant
   - servant-client
   - servant-server
+  # - telegram-raw-api
+  # - telegram-types
+  - http-conduit
   - text
   - time
   - transformers

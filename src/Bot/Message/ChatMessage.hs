@@ -23,16 +23,17 @@ import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Database.Persist
-import qualified Web.Telegram.Types as TG
+import TgBotAPI.Types.Chat (Chat (Chat, id))
+import TgBotAPI.Types.Message (Message (Message), chat, from, replyToMessage, text)
+import TgBotAPI.Types.User (User (User, id))
 
 handleChatMessage :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
 handleChatMessage = do
   -- increment "createUser"
   --   logDebugNS "web" "creating a user"
-  (Just TG.User {userId = userTgId}) <- asks $ TG.from . TG.metadata . message
-  TG.Chat {chatId = chatTgId} <- asks $ TG.chat . TG.metadata . message
-  TG.TextM {text} <- asks $ TG.content . message
-  let count = T.length text
+  Message {chat = Chat {id = chatTgId}, from = Just User {id = userTgId}, text = Just messageText} <- asks message
+
+  let count = T.length messageText
   runDbInMsgEnv
     ( do
         user <- upsertBy (DB.UniqueUserTgId userTgId) (DB.User userTgId False) [DB.UserTgId =. userTgId]
@@ -58,9 +59,9 @@ handleChatMessage = do
 
 handleChatMessageCommand :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
 handleChatMessageCommand = do
-  TG.MMetadata {from = (Just TG.User {userId = userTgId}), replyToMessage} <- asks $ TG.metadata . message
-  Just TG.Msg {metadata = TG.MMetadata {from = Just TG.User {userId = targetUserTgId}, chat = TG.Chat {chatId = chatTgId}}} <- pure replyToMessage
+  Message {chat = Chat {id = chatTgId}, from = Just User {id = userTgId}, text = Just messageText, replyToMessage = Just Message {from = Just User {id = targetUserTgId}}} <- asks message
 
+  let count = T.length messageText
   decisionInitDate <- liftIO getCurrentTime
   e <- runDbInMsgEnv $ do
     Just initUser <- getBy $ DB.UniqueUserTgId userTgId

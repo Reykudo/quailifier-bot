@@ -22,6 +22,7 @@ import Control.Concurrent (killThread)
 import Control.Exception.Safe
 import Control.Monad.Except (MonadTrans (lift), runExceptT)
 import Control.Monad.Logger
+-- import qualified Control.Monad.Metrics as M
 import Control.Monad.Reader (ReaderT (runReaderT))
 import Data.Monoid
 import qualified Data.Pool as Pool
@@ -36,12 +37,12 @@ import Lens.Micro ((^.))
 import Logger (defaultLogEnv)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
+-- import Network.Wai.Metrics (metrics, registerWaiMetrics)
 import Safe (readMay)
 import Say
 import System.Environment (lookupEnv)
 import System.Remote.Monitoring (forkServer, serverMetricStore, serverThreadId)
 import UnliftIO (MonadIO (liftIO), MonadUnliftIO, UnliftIO (unliftIO))
-import Web.Telegram.API (Token (..))
 
 -- | An action that creates a WAI 'Application' together with its resources,
 --   runs it, and tears it down on exit
@@ -120,10 +121,11 @@ withConfig action = do
               configLogEnv = logEnv,
               configPort = port,
               configEkgServer = serverThreadId ekgServer,
-              configToken = Token $ T.pack token,
+              configToken = T.pack token,
               configTgMaxHandlers = maxHandlers
             }
 
+-- | Takes care of cleaning up 'Config' resources
 shutdownApp :: Config -> IO ()
 shutdownApp cfg = do
   Katip.closeScribes (configLogEnv cfg)

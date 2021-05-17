@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
@@ -14,12 +15,16 @@ module Config where
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-import Control.Concurrent (ThreadId, forkIO)
+
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
 
 -- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+
+import Control.Concurrent (ThreadId, forkIO)
 import qualified Control.Concurrent.Forkable as F (ForkableMonad (forkIO))
 import Control.Exception.Safe (MonadCatch, throw, throwIO)
+-- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
+
 import Control.Monad (liftM, void)
 import Control.Monad.Except (ExceptT, MonadError, runExceptT)
 import Control.Monad.IO.Class
@@ -30,6 +35,7 @@ import Control.Monad.Reader (MonadIO, MonadReader (ask), ReaderT (runReaderT), a
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import qualified Data.ByteString.Char8 as BS
+import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
 import qualified Data.Text as T
@@ -42,14 +48,16 @@ import Database.Persist.Postgresql
   )
 import qualified Katip
 import Logger
+import qualified Network.HTTP.Simple as HS
 import Network.Wai (Middleware)
 import Network.Wai.Handler.Warp (Port)
 import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
 import Servant.Client (ClientError)
 import Servant.Server.Internal.ServerError
 import System.Environment (lookupEnv)
+import qualified TgBotAPI as TG
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), anonymousSecurityScheme)
 import UnliftIO (MonadUnliftIO, UnliftIO (unliftIO))
-import Web.Telegram.API (Token (Token))
 
 -- | This type represents the effects we want to have for our application.
 -- We wrap the standard Servant monad with 'ReaderT Config', which gives us
@@ -80,6 +88,9 @@ instance F.ForkableMonad App where
 
 type App = AppT IO
 
+instance MonadHTTP App where
+  httpBS = HS.httpBS
+
 -- | The Config for our application is (for now) the 'Environment' we're
 -- running in and a Persistent 'ConnectionPool'.
 data Config = Config
@@ -89,9 +100,21 @@ data Config = Config
     configEkgServer :: ThreadId,
     configLogEnv :: LogEnv,
     configPort :: Port,
-    configToken :: Token,
-    configTgMaxHandlers :: Int
+    configToken :: T.Text,
+    configTgMaxHandlers :: Int64
   }
+
+runMethod :: (MonadReader Config m, MonadIO m) => (Configuration -> a -> IO b) -> a -> m b
+runMethod method val = do
+  mc <- getMethodConfiguration
+  liftIO $ method mc val
+
+methodConfigurationFromConfig :: Config -> Configuration
+methodConfigurationFromConfig Config {configToken} = Configuration {configBaseURL = "https://api.telegram.org/bot" <> configToken <> "", configSecurityScheme = anonymousSecurityScheme}
+
+getMethodConfiguration :: (MonadReader Config m, MonadIO m) => m Configuration
+getMethodConfiguration = do
+  asks methodConfigurationFromConfig
 
 -- instance (MonadIO m, Katip IO) => MonadLoggerIO (KatipT m) where
 --   askLoggerIO = pure $ adapt logMsg

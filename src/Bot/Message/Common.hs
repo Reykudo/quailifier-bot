@@ -16,10 +16,9 @@
 
 module Bot.Message.Common where
 
-import Bot.Client (sendMessage)
 import qualified Bot.DbModels as BM
 import Bot.Exception
-import Config (Config (Config, configToken))
+import Config (Config (Config, configToken), runMethod)
 -- import Control.Monad.Trans.Reader (ReaderT (ReaderT, runReaderT))
 
 import Control.Applicative (Alternative)
@@ -31,8 +30,13 @@ import Control.Monad.Trans.Maybe (MaybeT (MaybeT))
 import Control.Monad.Trans.Reader hiding (ask, asks)
 import qualified Data.Text as T
 import Database.Persist.Postgresql (SqlPersistT)
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), anonymousSecurityScheme)
+import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, postSendMessage, postSendMessageWithConfiguration, replyMarkup, replyToMessageId, text)
+import TgBotAPI.Types.Chat (Chat (Chat, id))
+import TgBotAPI.Types.Message (Message (Message), chat, from, messageId)
+import TgBotAPI.Types.User (User (User, id))
 
-data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: TG.Message}
+data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: Message}
 
 newtype MessageEnvT m a = MessageEnvT
   {runMessageEnvT :: ReaderT MessageHandlerEnv (ExceptT BotException m) a}
@@ -68,21 +72,20 @@ runDbInMsgEnv q = skipMHE $ BM.runDb q
 replyBack :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => T.Text -> m ()
 replyBack e = do
   configToken <- asks $ configToken . config
-  TG.Msg {metadata = TG.MMetadata {messageId, from = Just TG.User {userId}, chat = TG.Chat {chatId}}} <- asks message
-  let sendBack = \text ->
-        liftIO $
-          sendMessage
-            configToken
-            ( TGS.SMsg
-                { chatId = ChatId chatId,
-                  text = text,
-                  disableWebPagePreview = Nothing,
-                  parseMode = Nothing,
-                  disableNotification = Nothing,
-                  replyToMessageId = Just $ fromIntegral messageId,
-                  -- replyToMessageId = Nothing,
-                  replyMarkup = Nothing
-                }
-            )
-  sendBack e
+  Message {messageId, from = Just User {id = userId}, chat = Chat {id = chatId}} <- asks message
+  skipMHE $
+    runMethod
+      postSendMessageWithConfiguration
+      ( PostSendMessageRequestBody
+          { chatId = ChatIdInt chatId,
+            text = e,
+            disableWebPagePreview = Nothing,
+            parseMode = Nothing,
+            disableNotification = Nothing,
+            replyToMessageId = Just messageId,
+            replyMarkup = Nothing,
+            allowSendingWithoutReply = Nothing,
+            entities = Nothing
+          }
+      )
   pure ()

@@ -63,6 +63,7 @@ library
     , hashable
     , http-client
     , http-client-tls
+    , http-conduit
     , katip
     , microlens
     , monad-control
@@ -119,6 +120,7 @@ executable quailifier-bot-exe
     , hashable
     , http-client
     , http-client-tls
+    , http-conduit
     , katip
     , microlens
     , monad-control
@@ -177,6 +179,7 @@ test-suite quailifier-bot-test
     , hashable
     , http-client
     , http-client-tls
+    , http-conduit
     , katip
     , microlens
     , monad-control

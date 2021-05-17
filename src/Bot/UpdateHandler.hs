@@ -16,21 +16,25 @@ import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO))
 import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.RWS (MonadReader)
-import Control.Monad.Reader (ReaderT (ReaderT, runReaderT), ask)
+import Control.Monad.Reader
+  ( ReaderT (ReaderT, runReaderT),
+    ask,
+  )
 import Control.Monad.Trans (lift)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Database.Persist ((=.))
 import Database.Persist.Postgresql (Entity (entityKey), PersistUniqueWrite (upsertBy), (+=.))
-import qualified Web.Telegram.Types as TT
-import Web.Telegram.Types.Update
+import TgBotAPI.Common
+import TgBotAPI.Types.Message (Message (Message))
+import TgBotAPI.Types.Update (Update (Update), message)
 
 runReaderTIn :: MonadReader r m => ReaderT r m b -> m b
 runReaderTIn m = ask >>= runReaderT m
 
 --   return $ fromSqlKey newUser
-updateHandler :: (MonadReader Config m, MonadLogger m, MonadIO m) => Update -> m ()
-updateHandler Message {message} = runReaderTIn $ handleMessage message
+updateHandler :: (MonadReader Config m, MonadLogger m, MonadIO m, MonadHTTP m) => Update -> m ()
+updateHandler Update {message = Just message} = handleMessage message
 updateHandler update = liftIO $ print update
 
 -- showMsg :: UpdateOrFallback -> Maybe Text

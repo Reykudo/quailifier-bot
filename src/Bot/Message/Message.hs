@@ -25,7 +25,7 @@ import Bot.Message.DirectMessage (handleDirectMessage)
 import Config (Config (Config))
 import Control.Applicative (Alternative ((<|>)))
 import Control.Exception (throw)
-import Control.Exception.Safe (throwM)
+import Control.Exception.Safe (throw, throwM)
 import Control.Monad (guard, join, when)
 import Control.Monad.Except (ExceptT (ExceptT), MonadError (throwError), mapExceptT, runExcept, runExceptT, withExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
@@ -37,20 +37,20 @@ import Control.Monad.Trans.Maybe
 import Data.Bifunctor (Bifunctor (bimap, first))
 import Data.Foldable (asum, traverse_)
 import qualified Data.Text as T
-import qualified Web.Telegram.Types as TT
+import TgBotAPI.Common (MonadHTTP)
+import TgBotAPI.Types.Chat (Chat (Chat, id))
+import TgBotAPI.Types.Message (Message (Message), chat, from, text)
+import TgBotAPI.Types.User (User (User, id))
 
 liftMaybe :: Applicative m => Maybe a -> MaybeT m a
 liftMaybe = MaybeT . pure
 
-handleMessage :: (MonadLogger m, MonadIO m, MonadReader Config m) => TT.Message -> m ()
+handleMessage :: (MonadLogger m, MonadIO m, MonadReader Config m, MonadHTTP m) => Message -> m ()
 handleMessage
-  message@TT.Msg
-    { TT.metadata =
-        TT.MMetadata
-          { TT.from = Just TT.User {TT.userId = userTgId},
-            TT.chat = TT.Chat {TT.chatId = chatTgId}
-          },
-      TT.content = TT.TextM {TT.text = text}
+  message@Message
+    { from = Just User {id = userTgId},
+      chat = Chat {id = chatTgId},
+      text
     } = do
     config <- ask
 
@@ -70,10 +70,14 @@ handleMessage
               withCondition (isDirectMessage' && isCommand') handleDirectMessage
             ]
       liftIO $ print res
-      if isDirectMessage' || isCommand'
-        then case res of
-          Left e -> runExceptT $ replyBack $ makeErrorReport e
-          Right r -> pure $ pure ()
-        else pure $ pure ()
+      a <-
+        ( if isDirectMessage' || isCommand'
+            then case res of
+              Left e -> runExceptT $ replyBack $ makeErrorReport e
+              Right r -> pure $ pure ()
+            else pure $ pure ()
+          )
+      liftIO $ putStrLn $ "replyBack" <> show a
+      pure ()
     pure ()
 handleMessage m = liftIO $ putStr $ show m <> "\n\n"
