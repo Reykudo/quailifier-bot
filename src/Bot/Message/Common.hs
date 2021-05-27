@@ -6,10 +6,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
@@ -18,23 +21,27 @@ module Bot.Message.Common where
 
 import qualified Bot.DbModels as BM
 import Bot.Exception
-import Config (Config (Config, configToken), runMethod)
+import Config (App, Config (Config, configToken), runMethod)
 -- import Control.Monad.Trans.Reader (ReaderT (ReaderT, runReaderT))
 
 import Control.Applicative (Alternative)
-import Control.Monad.Except (ExceptT (ExceptT), MonadError, MonadPlus)
+import Control.Exception.Safe (Exception, MonadCatch, throw, throwIO, try)
+import Control.Monad.Except (ExceptT (ExceptT), MonadError (throwError), MonadPlus, MonadTrans (lift), mapExceptT, runExceptT, withExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT))
 import Control.Monad.Trans.Reader hiding (ask, asks)
+import Data.Bifunctor (Bifunctor (second))
 import qualified Data.Text as T
 import Database.Persist.Postgresql (SqlPersistT)
-import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), anonymousSecurityScheme)
-import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, postSendMessage, postSendMessageWithConfiguration, replyMarkup, replyToMessageId, text)
+import qualified Network.HTTP.Client as HS
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), anonymousSecurityScheme)
+import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), PostSendMessageResponse, ReplyMarkup (..), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, postSendMessage, postSendMessageWithConfiguration, replyMarkup, replyToMessageId, text)
 import TgBotAPI.Types.Chat (Chat (Chat, id))
 import TgBotAPI.Types.Message (Message (Message), chat, from, messageId)
 import TgBotAPI.Types.User (User (User, id))
+import UnliftIO (MonadUnliftIO (withRunInIO), UnliftIO (unliftIO), withUnliftIO)
 
 data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: Message}
 
@@ -47,15 +54,15 @@ newtype MessageEnvT m a = MessageEnvT
       MonadReader MessageHandlerEnv,
       MonadError BotException,
       MonadIO,
-      MonadFail,
       MonadLogger,
       Alternative
     )
 
--- deriving newtype instance (Monad m)=> Alternative (MessageEnvT m)
+deriving instance MonadUnliftIO (MessageEnvT App)
 
--- instance MonadFail MessageEnvT where
---   fail =  ExceptT . pure . Left . RawText . T.pack
+instance Monad m => MonadFail (MessageEnvT m) where
+  fail = throwError . RawText . T.pack
+
 -- withConfig :: (MonadReader MessageHandlerEnv m, MonadIO m) => SqlPersistT IO b -> m b
 skipMHE m = do
   cfg <- asks config
@@ -67,25 +74,44 @@ runMessageHandlerReader message target = do
   config <- ask
   target `runReaderT` MessageHandlerEnv {message, config}
 
-runDbInMsgEnv q = skipMHE $ BM.runDb q
+runDbInMsgEnv :: (MonadIO m, MonadUnliftIO m, MonadReader MessageHandlerEnv m) => (SqlPersistT m) b -> m b
+runDbInMsgEnv = skipMHE . BM.runDb2
 
-replyBack :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => T.Text -> m ()
+instance (Monad m, MonadHTTP m) => MonadHTTP (ExceptT BotException (ReaderT MessageHandlerEnv m)) where
+  httpBS r = lift $ lift (httpBS r)
+
+replyBack :: (Monad m, MonadIO m) => T.Text -> MessageEnvT m (HS.Response PostSendMessageResponse)
 replyBack e = do
   configToken <- asks $ configToken . config
   Message {messageId, from = Just User {id = userId}, chat = Chat {id = chatId}} <- asks message
-  skipMHE $
-    runMethod
-      postSendMessageWithConfiguration
-      ( PostSendMessageRequestBody
-          { chatId = ChatIdInt chatId,
-            text = e,
-            disableWebPagePreview = Nothing,
-            parseMode = Nothing,
-            disableNotification = Nothing,
-            replyToMessageId = Just messageId,
-            replyMarkup = Nothing,
-            allowSendingWithoutReply = Nothing,
-            entities = Nothing
-          }
-      )
-  pure ()
+  a <-
+    runExceptT $
+      skipMHE $
+        runMethod
+          ( postSendMessage
+              ( PostSendMessageRequestBody
+                  { chatId = ChatIdInt chatId,
+                    text = e,
+                    disableWebPagePreview = Nothing,
+                    parseMode = Just "HTML",
+                    disableNotification = Nothing,
+                    replyToMessageId = Just messageId,
+                    replyMarkup =
+                      Just $
+                        ReplyMarkup
+                          { forceReply = Just False,
+                            inlineKeyboard = Just [],
+                            keyboard = Just [],
+                            oneTimeKeyboard = Just False,
+                            removeKeyboard = Just False,
+                            resizeKeyboard = Just False,
+                            selective = Just False
+                          },
+                    allowSendingWithoutReply = Nothing,
+                    entities = Nothing
+                  }
+              )
+          )
+  either (throwError . NetwortError) pure a
+
+-- pure $ either throwError Prelude.id a

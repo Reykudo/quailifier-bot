@@ -5,7 +5,7 @@ module Bot.Decision.Decision where
 
 import qualified Bot.DbModels as BM
 import Bot.Models (DecisionStatus (Process))
-import Config (Config (Config))
+import Config (App, Config (Config))
 import Control.Concurrent.Forkable (ForkableMonad (forkIO), ThreadId, threadDelay)
 import Control.Monad (forever)
 import Control.Monad.Cont (MonadIO)
@@ -29,7 +29,7 @@ allProcessedDecisions = do
       where_ $ (decision ^. BM.DecisionStatus) ==. val Process
       pure decision
 
-makeDecisions :: (MonadIO m, MonadReader Config m, ForkableMonad m) => m ()
+makeDecisions :: App ()
 makeDecisions = do
   v <- BM.runDb allProcessedDecisions
   pure ()
@@ -37,6 +37,6 @@ makeDecisions = do
 startSheduler :: (MonadIO m, MonadReader Config m, ForkableMonad m) => m ()
 startSheduler = void $
   forkIO . forever $ do
-    makeDecisions
+    -- makeDecisions
     liftIO $ threadDelay minuteMcS
     pure ()

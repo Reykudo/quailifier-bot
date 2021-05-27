@@ -21,7 +21,8 @@ module Bot.DbModels where
 import Bot.Models
 import Config (Config, configPool)
 import Control.Exception.Safe
-import Control.Monad.Reader (MonadIO, MonadReader, asks, liftIO)
+import Control.Monad.Reader (MonadIO, MonadReader, MonadTrans (lift), ReaderT, asks, liftIO)
+import Control.Monad.Trans.Reader (ReaderT (ReaderT))
 import Data.Aeson (ToJSON, Value (Bool))
 import Data.Int (Int64)
 import Data.Text (Text)
@@ -36,7 +37,7 @@ import Database.Persist.TH
     sqlSettings,
   )
 import Say
-import Servant.API.Generic (Generic)
+import UnliftIO (MonadUnliftIO)
 
 share
   [ mkPersist sqlSettings,
@@ -76,7 +77,12 @@ doMigrations = do
   runMigration migrateAll
   liftIO $ say "already run"
 
-runDb :: (MonadReader Config m, MonadIO m) => SqlPersistT IO b -> m b
+runDb :: (MonadReader Config m, MonadIO m, MonadUnliftIO m) => SqlPersistT m b -> m b
 runDb query = do
   pool <- asks configPool
-  liftIO $ runSqlPool query pool
+  runSqlPool query pool
+
+runDb2 :: (MonadIO m, MonadUnliftIO m) => (SqlPersistT m) b -> ReaderT Config m b
+runDb2 query = do
+  pool <- asks configPool
+  lift $ runSqlPool query pool

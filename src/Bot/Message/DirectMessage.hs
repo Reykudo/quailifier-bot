@@ -29,11 +29,11 @@ import qualified Bot.DbModels as DB
 import qualified Bot.DbModels as MD
 import Bot.Exception (BotExceptT, BotException (NotMatched))
 import Bot.Message.Common
-import Config (AppT, Config (Config, configToken), getMethodConfiguration)
+import Config (App, AppT, Config (Config, configToken), getMethodConfiguration)
 import Control.Applicative (Alternative ((<|>)), liftA)
 import Control.Concurrent.Async (mapConcurrently)
 import Control.Exception (Exception, catch, throw)
-import Control.Exception.Safe (MonadThrow, SomeException (SomeException), throwIO, throwM, try)
+import Control.Exception.Safe (MonadCatch, MonadThrow, SomeException (SomeException), throwIO, throwM, try)
 import Control.Monad (void)
 import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift))
 import Control.Monad.Except (Except, ExceptT, MonadError (catchError, throwError), liftEither, runExceptT)
@@ -42,7 +42,6 @@ import Control.Monad.RWS (MonadIO, MonadReader (ask), MonadWriter, guard)
 import Control.Monad.Reader (ReaderT (ReaderT, runReaderT), asks)
 import Control.Monad.Trans.Except (ExceptT (ExceptT))
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
-import Control.Parallel.Strategies (evalTraversable, rpar, runEval, runEvalIO, withStrategy)
 import Data.Coerce (coerce)
 import Data.Either.Combinators (isRight, maybeToRight)
 import Data.Foldable (traverse_)
@@ -66,12 +65,13 @@ import Database.Persist.Postgresql
     SqlPersistT,
   )
 import Network.HTTP.Client.Internal (Response (Response, responseBody))
-import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme))
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP)
 import TgBotAPI.Operations.PostGetChat (ChatIdVariants (ChatIdInt), PostGetChatRequestBody (PostGetChatRequestBody, chatId), PostGetChatResponse (PostGetChatResponse200), PostGetChatResponseBody200 (PostGetChatResponseBody200), postGetChatWithConfiguration, result)
 import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, replyMarkup, replyToMessageId)
 import TgBotAPI.Types.Chat (Chat (Chat, id), title)
 import TgBotAPI.Types.Message (Message (Message), from, messageId, text)
 import TgBotAPI.Types.User (User (User, id))
+import UnliftIO (MonadUnliftIO)
 
 data DMCommand = Start | Unknown | Subscribe | Unscribe | GetTop | GetMe
   deriving (Show, Eq)
@@ -89,7 +89,7 @@ replyMsg = \case
   Start -> Just "hi"
   _ -> Nothing
 
-handleDirectMessage :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
+handleDirectMessage :: MessageEnvT App ()
 handleDirectMessage = do
   cfg@Config {configToken} <- asks config
   Just User {id = userTgIdV} <- asks $ from . message
@@ -137,7 +137,7 @@ selectChatMatchedWith userId = do
       S.where_ ((rating ^. DB.RatingChat) S.==. chat S.^. DB.ChatId)
       pure chat
 
-reply :: (MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => Entity DB.User -> DMCommand -> m ()
+reply :: Entity DB.User -> DMCommand -> MessageEnvT App ()
 reply user command = do
   configToken <- asks $ configToken . config
   Message {messageId} <- asks message

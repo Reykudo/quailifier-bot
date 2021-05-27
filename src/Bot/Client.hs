@@ -27,7 +27,6 @@ import Control.Monad.Error.Class (MonadError (catchError), liftEither)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.RWS (MonadReader (ask))
 import Control.Monad.Reader (ReaderT (runReaderT))
-import qualified Control.Retry as Retry
 import qualified Data.Aeson as A
 import Data.Aeson.Types (Parser, (.:))
 import Data.Either (Either (Left, Right), either, isLeft)
@@ -42,19 +41,7 @@ import GHC.Generics (Generic)
 import Network.HTTP.Client (HttpException (HttpExceptionRequest))
 import Network.HTTP.Client.Internal (Request (Request))
 import Network.HTTP.Client.TLS (newTlsManager)
-import Servant
-  ( Proxy (..),
-    type (:>),
-  )
-import Servant.API
-  ( Capture,
-    Get,
-    JSON,
-    ReqBody,
-    type (:<|>) (..),
-    type (:>),
-  )
-import qualified Servant.Client as SC
+
 
 
 -- type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat

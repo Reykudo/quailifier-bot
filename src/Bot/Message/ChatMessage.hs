@@ -13,9 +13,9 @@ import qualified Bot.DbModels as DB
 import Bot.Exception (BotExceptT, BotException)
 import Bot.Message.Common
 import Bot.Models (DecisionStatus (Process))
-import Config (AppT (AppT), Config)
-import Control.Monad.Cont (MonadIO (liftIO))
-import Control.Monad.Except (MonadError)
+import Config (App, AppT (AppT), Config)
+import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift))
+import Control.Monad.Except (MonadError, mapExceptT, runExceptT)
 import Control.Monad.Logger (MonadLogger, logDebugNS)
 import Control.Monad.Reader (MonadReader (ask), ReaderT (runReaderT), asks)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT, runMaybeT))
@@ -23,11 +23,12 @@ import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Time (getCurrentTime)
 import Database.Persist
+import TgBotAPI.Common
 import TgBotAPI.Types.Chat (Chat (Chat, id))
 import TgBotAPI.Types.Message (Message (Message), chat, from, replyToMessage, text)
 import TgBotAPI.Types.User (User (User, id))
 
-handleChatMessage :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
+handleChatMessage :: MessageEnvT App ()
 handleChatMessage = do
   -- increment "createUser"
   --   logDebugNS "web" "creating a user"
@@ -57,7 +58,7 @@ handleChatMessage = do
 
   pure ()
 
-handleChatMessageCommand :: (MonadLogger m, MonadIO m, MonadReader MessageHandlerEnv m, MonadFail m, MonadError BotException m) => m ()
+handleChatMessageCommand :: MessageEnvT App ()
 handleChatMessageCommand = do
   Message {chat = Chat {id = chatTgId}, from = Just User {id = userTgId}, text = Just messageText, replyToMessage = Just Message {from = Just User {id = targetUserTgId}}} <- asks message
 
@@ -79,3 +80,4 @@ handleChatMessageCommand = do
     insert entity
 
   replyBack $ "Success" <> T.pack (show e)
+  pure ()

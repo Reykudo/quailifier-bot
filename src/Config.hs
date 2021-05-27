@@ -6,27 +6,18 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE StrictData #-}
-{-# LANGUAGE UndecidableInstances #-}
 
 module Config where
 
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
 import Control.Concurrent (ThreadId, forkIO)
 import qualified Control.Concurrent.Forkable as F (ForkableMonad (forkIO))
-import Control.Exception.Safe (MonadCatch, throw, throwIO)
--- import Control.Monad.Metrics (Metrics, MonadMetrics, getMetrics)
-
-import Control.Monad (liftM, void)
-import Control.Monad.Except (ExceptT, MonadError, runExceptT)
+import Control.Exception.Safe (MonadCatch, MonadThrow, catch, catchIO, throw, throwIO, try)
+import Control.Monad (liftM, void, (<=<))
+import Control.Monad.Catch.Pure (CatchT (CatchT, runCatchT), Exception, MonadThrow (throwM))
+import Control.Monad.Except
 import Control.Monad.IO.Class
 import Control.Monad.Logger (LogLevel (LevelDebug, LevelError, LevelInfo, LevelOther, LevelWarn), MonadLogger (..), MonadLoggerIO)
 import qualified Control.Monad.Logger as FastLogger
@@ -52,12 +43,11 @@ import qualified Network.HTTP.Simple as HS
 import Network.Wai (Middleware)
 import Network.Wai.Handler.Warp (Port)
 import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
-import Servant.Client (ClientError)
-import Servant.Server.Internal.ServerError
 import System.Environment (lookupEnv)
 import qualified TgBotAPI as TG
-import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), anonymousSecurityScheme)
-import UnliftIO (MonadUnliftIO, UnliftIO (unliftIO))
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), StripeT, anonymousSecurityScheme, runWithConfiguration)
+import UnliftIO (MonadUnliftIO (withRunInIO), UnliftIO (unliftIO))
+import Utils
 
 -- | This type represents the effects we want to have for our application.
 -- We wrap the standard Servant monad with 'ReaderT Config', which gives us
@@ -67,16 +57,21 @@ import UnliftIO (MonadUnliftIO, UnliftIO (unliftIO))
 -- By encapsulating the effects in our newtype, we can add layers to the
 -- monad stack without having to modify code that uses the current layout.
 newtype AppT m a = AppT
-  { runAppT :: ReaderT Config (ExceptT ClientError m) a
+  { runAppT :: ReaderT Config (ExceptT HS.HttpException m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
       MonadReader Config,
-      MonadError ClientError,
-      MonadIO
+      MonadError HS.HttpException,
+      MonadIO,
+      MonadThrow
     )
+
+deriving instance MonadCatch (AppT IO)
+
+deriving instance MonadUnliftIO App
 
 instance F.ForkableMonad App where
   forkIO m = do
@@ -89,7 +84,14 @@ instance F.ForkableMonad App where
 type App = AppT IO
 
 instance MonadHTTP App where
-  httpBS = HS.httpBS
+  httpBS req = do
+    liftIO $ putStrLn "----------"
+    liftIO $ print req
+    liftIO $ putStrLn "----------"
+    v <- liftIO $ try (httpBS req)
+    case v of
+      Left (e :: HS.HttpException) -> throwError e
+      Right r -> pure r
 
 -- | The Config for our application is (for now) the 'Environment' we're
 -- running in and a Persistent 'ConnectionPool'.
@@ -104,16 +106,19 @@ data Config = Config
     configTgMaxHandlers :: Int64
   }
 
-runMethod :: (MonadReader Config m, MonadIO m) => (Configuration -> a -> IO b) -> a -> m b
-runMethod method val = do
+runMethod :: (Monad m, MonadReader Config m, MonadIO m, MonadError HS.HttpException m) => StripeT IO b -> m b
+runMethod method = do
   mc <- getMethodConfiguration
-  liftIO $ method mc val
+  a <- liftIO $ try (runWithConfiguration mc method)
+  case a of
+    Left e -> throwError e
+    Right r -> pure r
 
 methodConfigurationFromConfig :: Config -> Configuration
-methodConfigurationFromConfig Config {configToken} = Configuration {configBaseURL = "https://api.telegram.org/bot" <> configToken <> "", configSecurityScheme = anonymousSecurityScheme}
+methodConfigurationFromConfig Config {configToken} = Configuration {configBaseURL = "http://api.telegram.org/bot" <> configToken <> "", configSecurityScheme = anonymousSecurityScheme}
 
 getMethodConfiguration :: (MonadReader Config m, MonadIO m) => m Configuration
-getMethodConfiguration = do
+getMethodConfiguration =
   asks methodConfigurationFromConfig
 
 -- instance (MonadIO m, Katip IO) => MonadLoggerIO (KatipT m) where
@@ -139,7 +144,15 @@ instance MonadIO m => MonadLogger (AppT m) where
 instance MonadIO m => MonadLogger (KatipT m) where
   monadLoggerLog = adapt logMsg
 
-instance (MonadIO m, Katip m, MonadLogger m) => MonadLoggerIO m where
+-- deriving instance MonadLoggerIO IO
+
+-- deriving instance MonadLoggerIO (KatipT IO)
+instance MonadLogger IO where
+  monadLoggerLog a b c d = do
+    logEnv <- defaultLogEnv
+    runKatipT logEnv $ adapt logMsg a b c d
+
+instance (MonadIO m, MonadLogger m) => MonadLoggerIO (KatipT m) where
   askLoggerIO = do
     logEnv <- getLogEnv
     pure (\a b c d -> runKatipT logEnv $ monadLoggerLog a b c d)
@@ -176,7 +189,8 @@ katipLogger env app req respond = runKatipT env $ do
 -- information from environment variables that are set by the keter
 -- deployment application.
 -- makePool :: Environment -> LogEnv -> IO ConnectionPool
-makePool :: Environment -> KatipT IO ConnectionPool
+-- makePool :: (MonadIO m, MonadUnliftIO m, MonadLoggerIO (KatipT m)) => Environment -> KatipT m ConnectionPool
+makePool :: (MonadUnliftIO m, MonadLoggerIO m) => Environment -> m (Pool SqlBackend)
 makePool Test = createPostgresqlPool (connStr "-test") (envPool Test)
 makePool Development = createPostgresqlPool (connStr "") (envPool Development)
 makePool Production = do
@@ -223,4 +237,4 @@ envPool Production = 64
 -- | A basic 'ConnectionString' for local/test development. Pass in either
 -- @""@ for 'Development' or @"test"@ for 'Test'.
 connStr :: BS.ByteString -> ConnectionString
-connStr sfx = "host=localhost dbname=mydb" <> sfx <> " user=postgres password=452565 port=5432"
+connStr sfx = "host=localhost dbname=mydb" <> sfx <> " user=postgres password=***** port=5432"

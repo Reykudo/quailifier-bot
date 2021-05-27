@@ -33,7 +33,6 @@ import Data.Typeable
 import Database.Persist.Postgresql (runSqlPool)
 import Katip (LogEnv (LogEnv))
 import qualified Katip
-import Lens.Micro ((^.))
 import Logger (defaultLogEnv)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
@@ -41,8 +40,9 @@ import Network.Wai.Handler.Warp (run)
 import Safe (readMay)
 import Say
 import System.Environment (lookupEnv)
-import System.Remote.Monitoring (forkServer, serverMetricStore, serverThreadId)
+import System.Remote.Monitoring (Server (serverThreadId), forkServer)
 import UnliftIO (MonadIO (liftIO), MonadUnliftIO, UnliftIO (unliftIO))
+import Utils
 
 -- | An action that creates a WAI 'Application' together with its resources,
 --   runs it, and tears it down on exit
@@ -59,6 +59,7 @@ runAppDevel = do
 
 -- | The 'initialize' function accepts the required environment information,
 -- initializes the WAI 'Application' and returns it
+initialize :: Config -> IO ()
 initialize cfg = do
   do
     say "initialize"
@@ -85,15 +86,10 @@ initialize cfg = do
             -- pure $ pure ()
         )
     say "making app"
-    let withRunInIO = \runInIO -> do
-          say "start sheduler"
-          runInIO $ startSheduler
-          updateLoop cfg (runInIO . updateHandler)
-    withRunInIO
-      ( \appT -> do
-          runExceptT $ runReaderT (runAppT appT) cfg
-          pure ()
-      )
+    (runExceptT . flip runReaderT cfg . runAppT) $ do
+      startSheduler
+      updateLoop updateHandler
+    pure ()
 
 -- withConfig :: (Config -> IO b) -> App ()
 withConfig :: (Config -> IO ()) -> IO ()
@@ -108,7 +104,7 @@ withConfig action = do
 
   bracket defaultLogEnv (\x -> say "closing katip scribes" >> Katip.closeScribes x) \logEnv -> do
     say "got log env"
-    !pool <- Katip.runKatipT logEnv (makePool env) `onException` say "exception in makePool"
+    pool <- Katip.runKatipT logEnv (makePool env) `onException` say "exception in makePool"
     say "got pool "
     liftIO $
       bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do

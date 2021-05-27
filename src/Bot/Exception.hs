@@ -1,21 +1,35 @@
 {-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Bot.Exception where
 
 import Control.Applicative (Alternative (empty, (<|>)))
+import Control.Exception (Exception)
 import Control.Monad (filterM)
-import Control.Monad.Except (ExceptT (ExceptT))
+import Control.Monad.Except (ExceptT (ExceptT), MonadError, mapExceptT, runExceptT)
+import Data.Bifunctor (Bifunctor (first))
 import qualified Data.Text as T
+import qualified Network.HTTP.Client as HS
 
 data BotException
   = UserNotFound
   | RawText T.Text
   | NotMatched
+  | NetwortError HS.HttpException
   | ManyErrors [BotException]
-  deriving (Show, Eq)
+  deriving (Show)
+
+deriving instance Exception BotException
+
+-- runWithBotException :: ExceptT HS.HttpException m b -> ExceptT BotException m b
+-- fromHttpToBotException :: Show s => s -> BotException
+
+runWithBotException :: (Monad m) => ExceptT HS.HttpException m b -> ExceptT BotException m b
+runWithBotException = mapExceptT (first NetwortError <$>)
 
 instance Semigroup BotException where
   ManyErrors l1 <> ManyErrors l2 = ManyErrors (l1 <> l2)
@@ -25,9 +39,6 @@ instance Semigroup BotException where
 
 instance Monoid BotException where
   mempty = ManyErrors []
-
-instance {-# OVERLAPPING #-} (Monad m) => MonadFail (ExceptT BotException m) where
-  fail = ExceptT . pure . Left . RawText . T.pack
 
 -- _ -> ""
 
