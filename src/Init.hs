@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BlockArguments #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -17,13 +18,16 @@ import qualified Bot.DbModels as DB
 import Bot.Decision.Decision (startSheduler)
 import Bot.UpdateHandler (updateHandler)
 import Bot.UpdateLoop (updateLoop)
-import Config (App, AppT (runAppT), Config (..), Environment (..), makePool, setLogger)
+import Config (App, AppT (runAppT), Config (..), Environment (..), GlobalCaches (..), makePool, setLogger)
 import Control.Concurrent (killThread)
 import Control.Exception.Safe
 import Control.Monad.Except (MonadTrans (lift), runExceptT)
 import Control.Monad.Logger
 -- import qualified Control.Monad.Metrics as M
 import Control.Monad.Reader (ReaderT (runReaderT))
+-- import Network.Wai.Metrics (metrics, registerWaiMetrics)
+
+import Data.Cache (newCache)
 import Data.Monoid
 import qualified Data.Pool as Pool
 import Data.Text (Text)
@@ -36,9 +40,9 @@ import qualified Katip
 import Logger (defaultLogEnv)
 import Network.Wai (Application)
 import Network.Wai.Handler.Warp (run)
--- import Network.Wai.Metrics (metrics, registerWaiMetrics)
 import Safe (readMay)
 import Say
+import System.Clock (TimeSpec (TimeSpec, nsec, sec))
 import System.Environment (lookupEnv)
 import System.Remote.Monitoring (Server (serverThreadId), forkServer)
 import UnliftIO (MonadIO (liftIO), MonadUnliftIO, UnliftIO (unliftIO))
@@ -106,20 +110,22 @@ withConfig action = do
     say "got log env"
     pool <- Katip.runKatipT logEnv (makePool env) `onException` say "exception in makePool"
     say "got pool "
-    liftIO $
-      bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do
-        say "forked ekg server"
-        action
-          Config
-            { configPool = pool,
-              configEnv = env,
-              -- , configMetrics = metr
-              configLogEnv = logEnv,
-              configPort = port,
-              configEkgServer = serverThreadId ekgServer,
-              configToken = T.pack token,
-              configTgMaxHandlers = maxHandlers
-            }
+
+    getMyCommandsCache <- newCache (Just TimeSpec {sec = 600, nsec = 0})
+
+    bracket (forkServer "localhost" 8082) (\x -> say "closing ekg" >> do killThread $ serverThreadId x) $ \ekgServer -> do
+      say "forked ekg server"
+      action
+        Config
+          { configPool = pool,
+            configEnv = env,
+            configCache = GlobalCaches {getMyCommandsCache},
+            configLogEnv = logEnv,
+            configPort = port,
+            configEkgServer = serverThreadId ekgServer,
+            configToken = T.pack token,
+            configTgMaxHandlers = maxHandlers
+          }
 
 -- | Takes care of cleaning up 'Config' resources
 shutdownApp :: Config -> IO ()

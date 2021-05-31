@@ -13,7 +13,6 @@
 module Config where
 
 import Control.Concurrent (ThreadId, forkIO)
-import qualified Control.Concurrent.Forkable as F (ForkableMonad (forkIO))
 import Control.Exception.Safe (MonadCatch, MonadThrow, catch, catchIO, throw, throwIO, try)
 import Control.Monad (liftM, void, (<=<))
 import Control.Monad.Catch.Pure (CatchT (CatchT, runCatchT), Exception, MonadThrow (throwM))
@@ -26,6 +25,8 @@ import Control.Monad.Reader (MonadIO, MonadReader (ask), ReaderT (runReaderT), a
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Maybe (MaybeT (..), runMaybeT)
 import qualified Data.ByteString.Char8 as BS
+import Data.Cache (Cache, insert, lookup)
+import Data.Hashable (Hashable)
 import Data.Int (Int64)
 import Data.Monoid ((<>))
 import Data.Pool (Pool)
@@ -46,8 +47,10 @@ import Network.Wai.Middleware.RequestLogger (logStdout, logStdoutDev)
 import System.Environment (lookupEnv)
 import qualified TgBotAPI as TG
 import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), StripeT, anonymousSecurityScheme, runWithConfiguration)
+import TgBotAPI.Operations.PostGetMyCommands (PostGetMyCommandsResponse)
 import UnliftIO (MonadUnliftIO (withRunInIO), UnliftIO (unliftIO))
 import Utils
+import Prelude hiding (lookup)
 
 -- | This type represents the effects we want to have for our application.
 -- We wrap the standard Servant monad with 'ReaderT Config', which gives us
@@ -73,25 +76,17 @@ deriving instance MonadCatch (AppT IO)
 
 deriving instance MonadUnliftIO App
 
-instance F.ForkableMonad App where
-  forkIO m = do
-    r <- ask
-    liftIO $
-      forkIO $ do
-        v <- runExceptT $ runReaderT (runAppT m) r
-        void $ either throw pure v
-
 type App = AppT IO
 
 instance MonadHTTP App where
   httpBS req = do
-    liftIO $ putStrLn "----------"
-    liftIO $ print req
-    liftIO $ putStrLn "----------"
     v <- liftIO $ try (httpBS req)
     case v of
       Left (e :: HS.HttpException) -> throwError e
       Right r -> pure r
+
+
+newtype GlobalCaches = GlobalCaches {getMyCommandsCache :: Cache () (HS.Response PostGetMyCommandsResponse)}
 
 -- | The Config for our application is (for now) the 'Environment' we're
 -- running in and a Persistent 'ConnectionPool'.
@@ -99,20 +94,13 @@ data Config = Config
   { configPool :: ConnectionPool,
     configEnv :: Environment,
     -- , configMetrics   :: Metrics
+    configCache :: GlobalCaches,
     configEkgServer :: ThreadId,
     configLogEnv :: LogEnv,
     configPort :: Port,
     configToken :: T.Text,
     configTgMaxHandlers :: Int64
   }
-
-runMethod :: (Monad m, MonadReader Config m, MonadIO m, MonadError HS.HttpException m) => StripeT IO b -> m b
-runMethod method = do
-  mc <- getMethodConfiguration
-  a <- liftIO $ try (runWithConfiguration mc method)
-  case a of
-    Left e -> throwError e
-    Right r -> pure r
 
 methodConfigurationFromConfig :: Config -> Configuration
 methodConfigurationFromConfig Config {configToken} = Configuration {configBaseURL = "http://api.telegram.org/bot" <> configToken <> "", configSecurityScheme = anonymousSecurityScheme}

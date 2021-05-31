@@ -51,6 +51,8 @@ library
     , async
     , base
     , bytestring
+    , cache
+    , clock
     , containers
     , either
     , ekg
@@ -60,8 +62,8 @@ library
     , exceptions
     , fast-logger
     , foreign-store
-    , forkable-monad
     , generic-deriving
+    , hashable
     , http-client
     , http-client-tls
     , http-conduit
@@ -69,7 +71,6 @@ library
     , monad-control
     , monad-logger
     , mtl
-    , once
     , persistent >=2.12.1.1
     , persistent-postgresql >=2.12.1.1
     , persistent-template >=2.12.0.0
@@ -100,6 +101,8 @@ executable quailifier-bot-exe
     , async
     , base
     , bytestring
+    , cache
+    , clock
     , containers
     , either
     , ekg
@@ -109,8 +112,8 @@ executable quailifier-bot-exe
     , exceptions
     , fast-logger
     , foreign-store
-    , forkable-monad
     , generic-deriving
+    , hashable
     , http-client
     , http-client-tls
     , http-conduit
@@ -118,7 +121,6 @@ executable quailifier-bot-exe
     , monad-control
     , monad-logger
     , mtl
-    , once
     , persistent >=2.12.1.1
     , persistent-postgresql >=2.12.1.1
     , persistent-template >=2.12.0.0
@@ -151,6 +153,8 @@ test-suite quailifier-bot-test
     , async
     , base
     , bytestring
+    , cache
+    , clock
     , containers
     , either
     , ekg
@@ -160,8 +164,8 @@ test-suite quailifier-bot-test
     , exceptions
     , fast-logger
     , foreign-store
-    , forkable-monad
     , generic-deriving
+    , hashable
     , http-client
     , http-client-tls
     , http-conduit
@@ -169,7 +173,6 @@ test-suite quailifier-bot-test
     , monad-control
     , monad-logger
     , mtl
-    , once
     , persistent >=2.12.1.1
     , persistent-postgresql >=2.12.1.1
     , persistent-template >=2.12.0.0

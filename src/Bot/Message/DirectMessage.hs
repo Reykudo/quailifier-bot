@@ -25,13 +25,13 @@
 
 module Bot.Message.DirectMessage where
 
+import Bot.Client (runMethod)
 import qualified Bot.DbModels as DB
 import qualified Bot.DbModels as MD
 import Bot.Exception (BotExceptT, BotException (NotMatched))
 import Bot.Message.Common
 import Config (App, AppT, Config (Config, configToken), getMethodConfiguration)
 import Control.Applicative (Alternative ((<|>)), liftA)
-import Control.Concurrent.Async (mapConcurrently)
 import Control.Exception (Exception, catch, throw)
 import Control.Exception.Safe (MonadCatch, MonadThrow, SomeException (SomeException), throwIO, throwM, try)
 import Control.Monad (void)
@@ -50,7 +50,7 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.String (IsString)
 import Data.Text (Text, intercalate)
 import qualified Data.Text as T
-import Database.Esqueleto ((^.))
+import Database.Esqueleto ((==.), (^.))
 import qualified Database.Esqueleto as S
 import qualified Database.Persist as DP
 import Database.Persist.Postgresql
@@ -66,40 +66,35 @@ import Database.Persist.Postgresql
   )
 import Network.HTTP.Client.Internal (Response (Response, responseBody))
 import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP)
-import TgBotAPI.Operations.PostGetChat (ChatIdVariants (ChatIdInt), PostGetChatRequestBody (PostGetChatRequestBody, chatId), PostGetChatResponse (PostGetChatResponse200), PostGetChatResponseBody200 (PostGetChatResponseBody200), postGetChatWithConfiguration, result)
+import TgBotAPI.Operations.PostGetChat (ChatIdVariants (ChatIdInt), PostGetChatRequestBody (PostGetChatRequestBody, chatId), PostGetChatResponse (PostGetChatResponse200), PostGetChatResponseBody200 (PostGetChatResponseBody200), postGetChat, postGetChatWithConfiguration, result)
 import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, replyMarkup, replyToMessageId)
 import TgBotAPI.Types.Chat (Chat (Chat, id), title)
 import TgBotAPI.Types.Message (Message (Message), from, messageId, text)
 import TgBotAPI.Types.User (User (User, id))
 import UnliftIO (MonadUnliftIO)
+import UnliftIO.Async (mapConcurrently)
 
-data DMCommand = Start | Unknown | Subscribe | Unscribe | GetTop | GetMe
+data DMCommand = Start | Unknown | Unsubscribe | Subscribe | Lawsuit
   deriving (Show, Eq)
 
 dmFromText :: (Eq a, IsString a) => a -> DMCommand
 dmFromText text = case text of
   "/start" -> Start
-  "/subscribe" -> Unscribe
-  "/unscribe" -> Subscribe
-  "/getMe" -> GetMe
+  "/subscribe" -> Subscribe
+  "/unsubscribe" -> Unsubscribe
+  "/lawsuit" -> Lawsuit
   _ -> Unknown
 
-replyMsg :: IsString a => DMCommand -> Maybe a
-replyMsg = \case
-  Start -> Just "hi"
-  _ -> Nothing
-
-handleDirectMessage :: MessageEnvT App ()
+handleDirectMessage :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
 handleDirectMessage = do
   cfg@Config {configToken} <- asks config
   Just User {id = userTgIdV} <- asks $ from . message
 
-  logDebugNS "web" "handle comand"
   user' <- runDbInMsgEnv $ selectFirst [DB.UserTgId DP.==. userTgIdV] []
   Just userEntity@Entity {entityVal} <- pure user'
   -- Msg {} <- asks message
   Just txt <- asks $ text . message
-  reply userEntity $ dmFromText txt
+  reply userEntity
 
   liftIO $ print $ show entityVal
   pure ()
@@ -133,30 +128,24 @@ selectChatMatchedWith ::
 selectChatMatchedWith userId = do
   S.select $
     S.distinct $ S.from \(chat, rating) -> do
-      S.where_ ((rating ^. DB.RatingUser) S.==. S.val userId)
-      S.where_ ((rating ^. DB.RatingChat) S.==. chat S.^. DB.ChatId)
+      S.where_ ((rating ^. DB.RatingUser) ==. S.val userId)
+      S.where_ ((rating ^. DB.RatingChat) ==. chat S.^. DB.ChatId)
       pure chat
 
-reply :: Entity DB.User -> DMCommand -> MessageEnvT App ()
-reply user command = do
+reply :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => Entity DB.User -> MessageEnvT m ()
+reply userEntity = do
   configToken <- asks $ configToken . config
-  Message {messageId} <- asks message
-
+  Message {messageId, text = Just txt} <- asks message
+  let command = dmFromText txt
   case command of
-    GetMe -> do
-      let Entity {entityKey = userId} = user
-      ratings <- runDbInMsgEnv $ DP.selectList [DB.RatingUser DP.==. userId] []
-      chats <- runDbInMsgEnv $ selectChatMatchedWith userId
-      mc <- skipMHE getMethodConfiguration
-      tgChats' <- liftIO $ mapConcurrently (\Entity {entityVal = MD.Chat chatTgId} -> postGetChatWithConfiguration mc PostGetChatRequestBody {chatId = TgBotAPI.Operations.PostGetChat.ChatIdInt chatTgId}) chats
-      let tgChats = (\Response {responseBody = PostGetChatResponse200 PostGetChatResponseBody200 {result = r}} -> r) <$> tgChats'
-
-      replyBack $ intercalate "\n" $ makeReport <$> zip ratings tgChats
-      pure ()
+    Subscribe -> do
+      runDbInMsgEnv $ DP.update (entityKey userEntity) [DB.UserSubscribed DP.=. True]
+      void $ replyBack "Subscribed!"
+    Unsubscribe -> do
+      runDbInMsgEnv $ DP.update (entityKey userEntity) [DB.UserSubscribed DP.=. False]
+      void $ replyBack "Unsubscribed."
+    Start -> void $ replyBack "Hello"
     _ -> throwError NotMatched
-  where
-    makeReport (Entity _ MD.Rating {MD.ratingCount = ratingCount}, Chat {id = chatId, title}) =
-      T.pack $ "Rating: " <> show ratingCount <> " in chat: " <> T.unpack (fromMaybe " - " title) <> " (" <> show chatId <> ") "
 
 -- -- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError BotException m) => Text -> BotException -> m ()
 -- reportException :: (MonadLogger m, MessageHandlerReader m, MonadIO m) => BotException -> BotExceptT m ()

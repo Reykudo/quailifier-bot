@@ -15,34 +15,36 @@
 
 module Bot.Client where
 
-import Config (Config (Config, configTgMaxHandlers, configToken))
-import Control.Applicative (Applicative (pure), (<|>))
-import Control.Concurrent (forkIO, newChan)
-import Control.Concurrent.Chan
-import Control.Concurrent.MVar
-import Control.Exception (SomeException (SomeException), throw, throwIO)
-import Control.Monad (join)
-import Control.Monad.Cont (forever, replicateM_)
-import Control.Monad.Error.Class (MonadError (catchError), liftEither)
-import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.RWS (MonadReader (ask))
-import Control.Monad.Reader (ReaderT (runReaderT))
-import qualified Data.Aeson as A
-import Data.Aeson.Types (Parser, (.:))
-import Data.Either (Either (Left, Right), either, isLeft)
-import Data.Foldable (Foldable (foldl', length), traverse_)
-import Data.IORef (modifyIORef', newIORef, readIORef, writeIORef)
-import Data.Int (Int64)
-import Data.Maybe (Maybe (Just, Nothing), fromMaybe)
-import Data.STRef (STRef, newSTRef)
-import qualified Data.Text as T
-import qualified Data.Text.IO as TIO
-import GHC.Generics (Generic)
-import Network.HTTP.Client (HttpException (HttpExceptionRequest))
-import Network.HTTP.Client.Internal (Request (Request))
-import Network.HTTP.Client.TLS (newTlsManager)
+import Bot.Exception (BotException (NetwortError))
+import Config (Config (configCache), GlobalCaches, getMethodConfiguration)
+import Control.Monad.Except (MonadError (throwError), MonadIO (liftIO))
+import Control.Monad.Reader (MonadReader, asks)
+import Data.Cache
+import Data.Hashable (Hashable)
+import qualified Network.HTTP.Client as HS
+import TgBotAPI.Common (StripeT, runWithConfiguration)
+import UnliftIO (MonadIO, try)
+import Prelude hiding (lookup)
 
+runMethod :: (Monad m, MonadReader Config m, MonadIO m, MonadError BotException m) => StripeT IO b -> m b
+runMethod method = do
+  mc <- getMethodConfiguration
+  a <- liftIO $ try (runWithConfiguration mc method)
+  case a of
+    Left (e :: HS.HttpException) -> throwError $ NetwortError e
+    Right r -> pure r
 
+runMethodWithCache :: (Monad m, MonadReader Config m, MonadIO m, MonadError BotException m, Eq a, Hashable a) => (GlobalCaches -> Cache a b) -> a -> (a -> StripeT IO b) -> m b
+runMethodWithCache accessor arg method = do
+  globalCache <- asks configCache
+  let cache = accessor globalCache
+  a <- liftIO $ lookup cache arg
+  case a of
+    Nothing -> do
+      v <- runMethod (method arg)
+      liftIO $ insert cache arg v
+      pure v
+    Just j -> pure j
 
 -- type Routes = WTA.SendMessage :<|> WTA.GetChatMember :<|> WTA.GetChat
 

@@ -13,12 +13,15 @@
 
 module Bot.UpdateLoop where
 
-import Config (App, AppT (runAppT), Config (Config, configTgMaxHandlers, configToken), getMethodConfiguration, methodConfigurationFromConfig, runMethod)
+import Bot.Client (runMethod)
+import Bot.Exception (BotException)
+import Bot.Message.Common (MessageEnvT (MessageEnvT))
+import Config (App, AppT (runAppT), Config (Config, configTgMaxHandlers, configToken), getMethodConfiguration)
 import Control.Applicative (Applicative (pure), (<|>))
 import Control.Exception (SomeException (SomeException), throw, throwIO)
 import Control.Monad (join)
 import Control.Monad.Cont (MonadIO (liftIO), MonadTrans (lift), forever, replicateM_)
-import Control.Monad.Except (ExceptT (..), runExceptT)
+import Control.Monad.Except (ExceptT (..), MonadError, runExceptT)
 import Control.Monad.Reader (MonadReader (ask), ReaderT (runReaderT))
 import Control.Monad.Trans.Maybe (MaybeT (runMaybeT))
 import qualified Data.Aeson as A
@@ -36,7 +39,7 @@ import Network.HTTP.Client.Internal (Response (Response))
 import TgBotAPI.Common
 import TgBotAPI.Operations.PostGetUpdates
 import TgBotAPI.Types.Update
-import UnliftIO (newChan, newMVar, putMVar, readChan, takeMVar, tryIO, writeChan)
+import UnliftIO (MonadUnliftIO, UnliftIO (unliftIO), newChan, newMVar, putMVar, readChan, takeMVar, tryIO, writeChan)
 import UnliftIO.Concurrent (forkIO)
 
 -- outputQueueHandler :: Chan (Maybe Text) -> IO ()
@@ -70,8 +73,7 @@ updateLoop handle = do
   -- mainLoopSync <- newMVar ()
   let threadHandler = \u ->
         ( do
-            let a = runAppT (handle u) `runReaderT` cfg
-            runExceptT a
+            handle u
             writeChan threadsCount ()
         )
 
@@ -98,7 +100,7 @@ updateLoop handle = do
       Right Response {responseBody = PostGetUpdatesResponse200 v} -> do
         let res = result v
 
-        traverse_ (liftIO . forkIO . threadHandler) res
+        traverse_ (forkIO . threadHandler) res
         putMVar currentOffset $ foldl' (flip (max . Just . updateId)) Nothing res
 
         replicateM_ (length res) $ readChan threadsCount

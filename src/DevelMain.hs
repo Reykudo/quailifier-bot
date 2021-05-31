@@ -61,7 +61,7 @@ update = do
     restartAppInNewThread tidStore = modifyStoredIORef tidStore $ \tid -> do
       say $ "killing thread: " <> tshow tid
       killThread tid
-      say $ "taking mvar"
+      say "taking mvar"
       withStore doneStore takeMVar
       readStore doneStore >>= start
     start ::

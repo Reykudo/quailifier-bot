@@ -19,11 +19,12 @@
 
 module Bot.Message.Common where
 
-import qualified Bot.DbModels as BM
-import Bot.Exception
-import Config (App, Config (Config, configToken), runMethod)
 -- import Control.Monad.Trans.Reader (ReaderT (ReaderT, runReaderT))
 
+import Bot.Client (runMethod)
+import qualified Bot.DbModels as BM
+import Bot.Exception
+import Config (App, Config (Config, configCache, configToken))
 import Control.Applicative (Alternative)
 import Control.Exception.Safe (Exception, MonadCatch, throw, throwIO, try)
 import Control.Monad.Except (ExceptT (ExceptT), MonadError (throwError), MonadPlus, MonadTrans (lift), mapExceptT, runExceptT, withExceptT)
@@ -112,6 +113,6 @@ replyBack e = do
                   }
               )
           )
-  either (throwError . NetwortError) pure a
+  either throwError pure a
 
 -- pure $ either throwError Prelude.id a
