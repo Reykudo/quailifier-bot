@@ -26,15 +26,15 @@ import TgBotAPI.Common (StripeT, runWithConfiguration)
 import UnliftIO (MonadIO, try)
 import Prelude hiding (lookup)
 
-runMethod :: (Monad m, MonadReader Config m, MonadIO m, MonadError BotException m) => StripeT IO b -> m b
+runMethod :: (Monad m, MonadReader Config m, MonadIO m, MonadError HS.HttpException m) => StripeT IO b -> m b
 runMethod method = do
   mc <- getMethodConfiguration
   a <- liftIO $ try (runWithConfiguration mc method)
   case a of
-    Left (e :: HS.HttpException) -> throwError $ NetwortError e
+    Left (e :: HS.HttpException) -> throwError e
     Right r -> pure r
 
-runMethodWithCache :: (Monad m, MonadReader Config m, MonadIO m, MonadError BotException m, Eq a, Hashable a) => (GlobalCaches -> Cache a b) -> a -> (a -> StripeT IO b) -> m b
+runMethodWithCache :: (Monad m, MonadReader Config m, MonadIO m, MonadError HS.HttpException m, Eq a, Hashable a) => (GlobalCaches -> Cache a b) -> a -> (a -> StripeT IO b) -> m b
 runMethodWithCache accessor arg method = do
   globalCache <- asks configCache
   let cache = accessor globalCache

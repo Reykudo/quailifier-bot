@@ -50,20 +50,15 @@ import Data.Maybe (fromMaybe, isJust)
 import Data.String (IsString)
 import Data.Text (Text, intercalate)
 import qualified Data.Text as T
-import Database.Esqueleto ((==.), (^.))
-import qualified Database.Esqueleto as S
-import qualified Database.Persist as DP
-import Database.Persist.Postgresql
-  ( BackendCompatible,
-    Entity (Entity, entityKey, entityVal),
-    Key,
-    PersistQueryRead (selectFirst),
-    PersistRecordBackend,
-    PersistStoreRead (get),
-    PersistUniqueRead,
-    SqlBackend,
-    SqlPersistT,
+import Database.Esqueleto.Experimental
+  ( (<=.),
+    (=.),
+    (==.),
+    (^.),
+    type (:&) ((:&)),
   )
+import qualified Database.Esqueleto.Experimental as S
+import qualified Database.Persist as P
 import Network.HTTP.Client.Internal (Response (Response, responseBody))
 import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP)
 import TgBotAPI.Operations.PostGetChat (ChatIdVariants (ChatIdInt), PostGetChatRequestBody (PostGetChatRequestBody, chatId), PostGetChatResponse (PostGetChatResponse200), PostGetChatResponseBody200 (PostGetChatResponseBody200), postGetChat, postGetChatWithConfiguration, result)
@@ -74,24 +69,13 @@ import TgBotAPI.Types.User (User (User, id))
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Async (mapConcurrently)
 
-data DMCommand = Start | Unknown | Unsubscribe | Subscribe | Lawsuit
-  deriving (Show, Eq)
-
-dmFromText :: (Eq a, IsString a) => a -> DMCommand
-dmFromText text = case text of
-  "/start" -> Start
-  "/subscribe" -> Subscribe
-  "/unsubscribe" -> Unsubscribe
-  "/lawsuit" -> Lawsuit
-  _ -> Unknown
-
 handleDirectMessage :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
 handleDirectMessage = do
   cfg@Config {configToken} <- asks config
   Just User {id = userTgIdV} <- asks $ from . message
 
-  user' <- runDbInMsgEnv $ selectFirst [DB.UserTgId DP.==. userTgIdV] []
-  Just userEntity@Entity {entityVal} <- pure user'
+  user' <- runDbInMsgEnv $ S.selectFirst [DB.UserTgId P.==. userTgIdV] []
+  Just userEntity@S.Entity {entityVal} <- pure user'
   -- Msg {} <- asks message
   Just txt <- asks $ text . message
   reply userEntity
@@ -119,30 +103,38 @@ handleDirectMessage = do
 -- reply :: MonadReader Config m => Entity DB.User -> p -> m ()2
 selectChatMatchedWith ::
   ( MonadIO m,
-    BackendCompatible SqlBackend backend,
-    PersistQueryRead backend,
-    PersistUniqueRead backend
+    S.BackendCompatible S.SqlBackend backend,
+    S.PersistQueryRead backend,
+    S.PersistUniqueRead backend
   ) =>
-  Key DB.User ->
-  ReaderT backend m [Entity DB.Chat]
+  S.Key DB.User ->
+  ReaderT backend m [S.Entity DB.Chat]
 selectChatMatchedWith userId = do
   S.select $
-    S.distinct $ S.from \(chat, rating) -> do
+    S.distinct do
+      (chat :& rating :& user) <-
+        S.from $
+          S.table @DB.Chat `S.innerJoin` S.table @DB.Rating `S.on` (\(chat :& rating) -> chat ^. DB.ChatId ==. rating ^. DB.RatingChat)
+            `S.innerJoin` S.table @DB.User `S.on` (\(_ :& rating :& user) -> rating ^. DB.RatingUser ==. user ^. DB.UserId)
       S.where_ ((rating ^. DB.RatingUser) ==. S.val userId)
-      S.where_ ((rating ^. DB.RatingChat) ==. chat S.^. DB.ChatId)
+      S.where_ ((rating ^. DB.RatingChat) ==. chat ^. DB.ChatId)
       pure chat
 
-reply :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => Entity DB.User -> MessageEnvT m ()
+setSubscribed userEntity isSubscribe = runDbInMsgEnv $ S.update \user -> do
+  S.set user [DB.UserSubscribed =. S.val isSubscribe]
+  S.where_ $ user ^. DB.UserId ==. S.val (S.entityKey userEntity)
+
+reply :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => S.Entity DB.User -> MessageEnvT m ()
 reply userEntity = do
   configToken <- asks $ configToken . config
   Message {messageId, text = Just txt} <- asks message
-  let command = dmFromText txt
+  Just command <- asks command
   case command of
     Subscribe -> do
-      runDbInMsgEnv $ DP.update (entityKey userEntity) [DB.UserSubscribed DP.=. True]
+      setSubscribed userEntity True
       void $ replyBack "Subscribed!"
     Unsubscribe -> do
-      runDbInMsgEnv $ DP.update (entityKey userEntity) [DB.UserSubscribed DP.=. False]
+      setSubscribed userEntity False
       void $ replyBack "Unsubscribed."
     Start -> void $ replyBack "Hello"
     _ -> throwError NotMatched

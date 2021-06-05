@@ -17,7 +17,7 @@
 #
 # resolver: ./custom-snapshot.yaml
 # resolver: https://example.com/snapshots/2018-01-01.yaml
-resolver: lts-17.10
+resolver: lts-17.14
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.
@@ -48,17 +48,12 @@ extra-deps:
     commit: 77255f27c5e95dd30a2d48927867ab050cbccc49
 
   - env-extra-1.0.0.0@sha256:2b5f58f5756dedf9956c2f5738920b082ab8e08a0b62b902b67f5134cecad00d,1558
-  # - open-union-0.4.0.0@sha256:1c8f8090054b0974e95e44bed88e74fff956ba2120aade6e8deea92d65ef5e49,3503
-  - servant-js-0.9.4.2@sha256:2419d2cba7ff71926293fa11fc50eaed24a77ba34e7c778eab4cfa1f4bc4a748,3385
-  # - wai-middleware-metrics-0.2.4@sha256:d6b6916acd41aaef4ca59a839d40a3a377f9df784ae49fd4c64926ae916b6ba2,2890
-  # - github: enobayram/type-fun
-  #   commit: 35bda1ea0176b1a92f8e96e5cd0efa9dbc4d7e7c
-
-  - persistent-2.12.1.1@sha256:90396838685cb23f1a9ac0fe4e9d3e75ada64c5d6b40bfb1a473860fb3dc15a9,5901
-  - persistent-postgresql-2.12.1.1@sha256:b14188566d4768074089cbfc139e7f4f78e03bb00e97462d63dc3054af2894d6,3454
+  - esqueleto-3.5.0.0@sha256:81f711f4fa7703c04effe583cd2a76ec514f4a900a3340f192ff42e0abcf949f,6083
+  - persistent-2.13.0.2@sha256:edc8c5bd22fb828cf7624c3ce92f4e9c7cf979c6a1d458745d33cd70f06e10fc,6297
+  - persistent-postgresql-2.13.0.1@sha256:3909ef780b04adf60cdd5ebff4f52c164d9b7ca5ffeca7e0c9921d6a0691c534,3557
   - persistent-template-2.12.0.0@sha256:7c68de6624ff83e14b674745e1c895dcf7c8676f6f24be131c89e2e4c2fa4510,1008
 
-  - esqueleto-3.4.2.0@sha256:f59c9427ec9e26a4ad45ee7fa5a5f6f88887a842857e76aaf2dcb0e65f7bcd3f,5783
+  - lift-type-0.1.0.1@sha256:6e38e49bf086fd2203346417d96ad2e6c300d8d8f41d222780abdccc7a4e451b,1106
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

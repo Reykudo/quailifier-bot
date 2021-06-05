@@ -58,10 +58,9 @@ handleChatMessage = do
 
   pure ()
 
-handleChatMessageCommand :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
-handleChatMessageCommand = do
+handleLawsuit :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
+handleLawsuit = do
   m <- asks message
-
   Message {chat = Chat {id = chatTgId}, from = Just User {id = userTgId}, text = Just messageText, replyToMessage = Just Message {from = Just User {id = targetUserTgId}}} <- pure m
 
   let count = T.length messageText

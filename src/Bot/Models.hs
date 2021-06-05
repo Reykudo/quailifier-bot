@@ -9,7 +9,7 @@ module Bot.Models where
 import Data.Aeson (FromJSON, ToJSON)
 import Data.ByteString.Char8 (unpack)
 import Data.String (IsString (fromString))
-import Database.Esqueleto (PersistField, PersistFieldSql (sqlType), PersistValue (PersistByteString, PersistInt64), SqlType (SqlBlob, SqlString), val)
+import Database.Esqueleto.Experimental
 import Database.Persist.Class (PersistField (fromPersistValue, toPersistValue))
 import Generics.Deriving (Generic)
 
@@ -27,4 +27,4 @@ instance PersistField DecisionStatus where
   fromPersistValue _ = Left "is not a DecisionStatus"
 
 instance PersistFieldSql DecisionStatus where
-  sqlType _ = SqlBlob 
+  sqlType _ = SqlBlob

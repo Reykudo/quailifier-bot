@@ -4,7 +4,7 @@
 
 module Bot.Decision.Decision where
 
-import qualified Bot.DbModels as BM
+import qualified Bot.DbModels as DB
 import Bot.Models (DecisionStatus (Process))
 import Config (App, Config (Config))
 import Control.Monad (forever)
@@ -17,7 +17,7 @@ import UnliftIO (UnliftIO (unliftIO))
 import UnliftIO.Concurrent (forkIO, threadDelay)
 
 minuteMcS :: Int
-minuteMcS = 6000000
+minuteMcS = 6000000 * 2
 
 -- allProcessedDecisions ::
 --   ( MonadIO m,
@@ -26,20 +26,34 @@ minuteMcS = 6000000
 --     PersistUniqueRead backend
 --   ) =>
 --   UTCTime ->
---   ReaderT backend m [Entity BM.Decision]
+--   ReaderT backend m [Entity DB.Decision]
 
--- allProcessedDecisions :: (MonadIO m, BackendCompatible SqlBackend backend, PersistQueryRead backend, PersistUniqueRead backend) => UTCTime -> ReaderT backend m [Entity BM.User]
-allProcessedDecisions :: (MonadIO m, BackendCompatible SqlBackend backend, PersistQueryRead backend, PersistUniqueRead backend) => UTCTime -> ReaderT backend m [(Entity BM.User, Entity BM.Decision)]
+-- allProcessedDecisions :: (MonadIO m, BackendCompatible SqlBackend backend, PersistQueryRead backend, PersistUniqueRead backend) => UTCTime -> ReaderT backend m [Entity DB.User]
+allProcessedDecisions ::
+  ( MonadIO m,
+    BackendCompatible SqlBackend backend,
+    PersistQueryRead backend,
+    PersistUniqueRead backend
+  ) =>
+  UTCTime ->
+  ReaderT backend m [(Entity DB.User, Entity DB.Decision, Entity DB.User)]
 allProcessedDecisions timeExpire = select $ distinct do
-  (decision :& user) <- from $ (Table @BM.Decision) `InnerJoin` (Table @BM.User) `on` \(decision :& user) -> decision ^. BM.DecisionTargetUser ==. user ^. BM.UserId
-  where_ (decision ^. BM.DecisionStatus ==. val Process)
-  where_ (decision ^. BM.DecisionInitDate <=. val timeExpire)
-  pure (user, decision)
+  (initUser :& decision :& targetUser) <-
+    from $
+      table @DB.User
+        `innerJoin` table @DB.Decision `on` (\(initUser :& decision) -> (decision ^. DB.DecisionInitUser ==. initUser ^. DB.UserId))
+        `innerJoin` table @DB.User `on` (\(_ :& decision :& targetUser) -> decision ^. DB.DecisionTargetUser ==. targetUser ^. DB.UserId)
+  where_
+    (decision ^. DB.DecisionStatus ==. val Process)
+  where_
+    (decision ^. DB.DecisionInitDate <=. val timeExpire)
+  pure (initUser, decision, targetUser)
 
 makeDecisions :: App ()
 makeDecisions = do
   now <- liftIO getCurrentTime
-  pairs <- BM.runDb $ allProcessedDecisions $ addUTCTime (secondsToNominalDiffTime (-3600)) now
+  let timeExpire = addUTCTime (secondsToNominalDiffTime (-3600)) now
+  pairs <- DB.runDb $ allProcessedDecisions timeExpire
 
   pure ()
 

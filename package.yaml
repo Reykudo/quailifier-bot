@@ -42,7 +42,7 @@ dependencies:
   - persistent >= 2.12.1.1
   - persistent-postgresql >= 2.12.1.1
   - persistent-template >= 2.12.0.0
-  - esqueleto >= 3.4.2.0
+  - esqueleto >= 3.5.0.0
   - product-profunctors
   - resource-pool
   - safe

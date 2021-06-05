@@ -34,6 +34,7 @@ import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT))
 import Control.Monad.Trans.Reader hiding (ask, asks)
 import Data.Bifunctor (Bifunctor (second))
+import Data.String (IsString)
 import qualified Data.Text as T
 import Database.Persist.Postgresql (SqlPersistT)
 import qualified Network.HTTP.Client as HS
@@ -44,7 +45,21 @@ import TgBotAPI.Types.Message (Message (Message), chat, from, messageId)
 import TgBotAPI.Types.User (User (User, id))
 import UnliftIO (MonadUnliftIO (withRunInIO), UnliftIO (unliftIO), withUnliftIO)
 
-data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: Message}
+data MessageHandlerEnv = MessageHandlerEnv {config :: Config, message :: Message, command :: Maybe MyBotCommand}
+
+data MyBotCommand = Start | Unknown | Unsubscribe | Subscribe | Lawsuit
+  deriving (Show, Eq)
+
+fromNetworkError :: Functor m => ExceptT HS.HttpException m b -> ExceptT BotException m b
+fromNetworkError = withExceptT NetwortError
+
+getMyBotCommand :: (Eq a, IsString a) => a -> MyBotCommand
+getMyBotCommand text = case text of
+  "start" -> Start
+  "subscribe" -> Subscribe
+  "unsubscribe" -> Unsubscribe
+  "lawsuit" -> Lawsuit
+  _ -> Unknown
 
 newtype MessageEnvT m a = MessageEnvT
   {runMessageEnvT :: ReaderT MessageHandlerEnv (ExceptT BotException m) a}
@@ -71,9 +86,9 @@ skipMHE m = do
 
 -- runMessageHandlerReader :: (MonadReader Config m, MonadReader MessageHandlerEnv m) => TG.Message -> n b -> m b
 -- runMessageHandlerReader :: MonadReader Config m => TG.Message -> ReaderT MessageHandlerEnv m b -> m b
-runMessageHandlerReader message target = do
-  config <- ask
-  target `runReaderT` MessageHandlerEnv {message, config}
+-- runMessageHandlerReader message target = do
+--   config <- ask
+--   target `runReaderT` MessageHandlerEnv {message, config}
 
 runDbInMsgEnv :: (MonadIO m, MonadUnliftIO m, MonadReader MessageHandlerEnv m) => (SqlPersistT m) b -> m b
 runDbInMsgEnv = skipMHE . BM.runDb2
@@ -86,7 +101,7 @@ replyBack e = do
   configToken <- asks $ configToken . config
   Message {messageId, from = Just User {id = userId}, chat = Chat {id = chatId}} <- asks message
   a <-
-    runExceptT $
+    runExceptT $fromNetworkError $
       skipMHE $
         runMethod
           ( postSendMessage

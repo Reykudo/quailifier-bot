@@ -58,7 +58,7 @@ library
     , ekg
     , ekg-core
     , env-extra
-    , esqueleto >=3.4.2.0
+    , esqueleto >=3.5.0.0
     , exceptions
     , fast-logger
     , foreign-store
@@ -108,7 +108,7 @@ executable quailifier-bot-exe
     , ekg
     , ekg-core
     , env-extra
-    , esqueleto >=3.4.2.0
+    , esqueleto >=3.5.0.0
     , exceptions
     , fast-logger
     , foreign-store
@@ -160,7 +160,7 @@ test-suite quailifier-bot-test
     , ekg
     , ekg-core
     , env-extra
-    , esqueleto >=3.4.2.0
+    , esqueleto >=3.5.0.0
     , exceptions
     , fast-logger
     , foreign-store
