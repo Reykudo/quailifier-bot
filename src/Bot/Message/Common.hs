@@ -24,7 +24,7 @@ module Bot.Message.Common where
 import Bot.Client (runMethod)
 import qualified Bot.DbModels as BM
 import Bot.Exception
-import Config (App, Config (Config, configCache, configToken))
+import Config (App, Config (Config, configCache, configToken), getMethodConfiguration)
 import Control.Applicative (Alternative)
 import Control.Exception.Safe (Exception, MonadCatch, throw, throwIO, try)
 import Control.Monad.Except (ExceptT (ExceptT), MonadError (throwError), MonadPlus, MonadTrans (lift), mapExceptT, runExceptT, withExceptT)
@@ -34,11 +34,12 @@ import Control.Monad.Reader (MonadReader, ask, asks)
 import Control.Monad.Trans.Maybe (MaybeT (MaybeT))
 import Control.Monad.Trans.Reader hiding (ask, asks)
 import Data.Bifunctor (Bifunctor (second))
+import Data.Int (Int64)
 import Data.String (IsString)
 import qualified Data.Text as T
 import Database.Persist.Postgresql (SqlPersistT)
 import qualified Network.HTTP.Client as HS
-import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), anonymousSecurityScheme)
+import TgBotAPI.Common (Configuration (Configuration, configBaseURL, configSecurityScheme), MonadHTTP (httpBS), anonymousSecurityScheme, runWithConfiguration)
 import TgBotAPI.Operations.PostSendMessage (ChatIdVariants (ChatIdInt), PostSendMessageRequestBody (PostSendMessageRequestBody), PostSendMessageResponse, ReplyMarkup (..), allowSendingWithoutReply, chatId, disableNotification, disableWebPagePreview, entities, parseMode, postSendMessage, postSendMessageWithConfiguration, replyMarkup, replyToMessageId, text)
 import TgBotAPI.Types.Chat (Chat (Chat, id))
 import TgBotAPI.Types.Message (Message (Message), chat, from, messageId)
@@ -71,7 +72,8 @@ newtype MessageEnvT m a = MessageEnvT
       MonadError BotException,
       MonadIO,
       MonadLogger,
-      Alternative
+      Alternative,
+      MonadPlus
     )
 
 deriving instance MonadUnliftIO (MessageEnvT App)
@@ -96,8 +98,20 @@ runDbInMsgEnv = skipMHE . BM.runDb2
 instance (Monad m, MonadHTTP m) => MonadHTTP (ExceptT BotException (ReaderT MessageHandlerEnv m)) where
   httpBS r = lift $ lift (httpBS r)
 
+emptyReplyMarkup =
+  Just $
+    ReplyMarkup
+      { forceReply = Just False,
+        inlineKeyboard = Just [],
+        keyboard = Just [],
+        oneTimeKeyboard = Just False,
+        removeKeyboard = Just False,
+        resizeKeyboard = Just False,
+        selective = Just False
+      }
+
 replyBack :: (Monad m, MonadIO m) => T.Text -> MessageEnvT m (HS.Response PostSendMessageResponse)
-replyBack e = do
+replyBack text = do
   configToken <- asks $ configToken . config
   Message {messageId, from = Just User {id = userId}, chat = Chat {id = chatId}} <- asks message
   a <-
@@ -107,27 +121,39 @@ replyBack e = do
           ( postSendMessage
               ( PostSendMessageRequestBody
                   { chatId = ChatIdInt chatId,
-                    text = e,
+                    text,
                     disableWebPagePreview = Nothing,
                     parseMode = Just "HTML",
                     disableNotification = Nothing,
                     replyToMessageId = Just messageId,
-                    replyMarkup =
-                      Just $
-                        ReplyMarkup
-                          { forceReply = Just False,
-                            inlineKeyboard = Just [],
-                            keyboard = Just [],
-                            oneTimeKeyboard = Just False,
-                            removeKeyboard = Just False,
-                            resizeKeyboard = Just False,
-                            selective = Just False
-                          },
+                    replyMarkup = emptyReplyMarkup,
                     allowSendingWithoutReply = Nothing,
                     entities = Nothing
                   }
               )
           )
   either throwError pure a
+
+sendMessage :: Int64 -> T.Text -> App (HS.Response PostSendMessageResponse)
+sendMessage userTgId text = do
+  configToken <- asks configToken
+  mc <- getMethodConfiguration
+
+  runWithConfiguration
+    mc
+    ( postSendMessage
+        ( PostSendMessageRequestBody
+            { chatId = ChatIdInt userTgId,
+              text,
+              disableWebPagePreview = Nothing,
+              parseMode = Just "HTML",
+              disableNotification = Nothing,
+              replyToMessageId = Nothing,
+              replyMarkup = emptyReplyMarkup,
+              allowSendingWithoutReply = Nothing,
+              entities = Nothing
+            }
+        )
+    )
 
 -- pure $ either throwError Prelude.id a

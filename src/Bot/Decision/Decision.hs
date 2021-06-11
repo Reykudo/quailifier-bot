@@ -1,20 +1,28 @@
 {-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications #-}
 
 module Bot.Decision.Decision where
 
 import qualified Bot.DbModels as DB
+-- import Database.Esqueleto
+
+import Bot.Message.Common (sendMessage)
 import Bot.Models (DecisionStatus (Process))
 import Config (App, Config (Config))
 import Control.Monad (forever)
 import Control.Monad.Cont (MonadIO)
 import Control.Monad.Reader
+import Data.Foldable (traverse_)
 import Data.Time (NominalDiffTime, UTCTime, addUTCTime, diffUTCTime, getCurrentTime, secondsToNominalDiffTime)
--- import Database.Esqueleto
 import Database.Esqueleto.Experimental
 import UnliftIO (UnliftIO (unliftIO))
 import UnliftIO.Concurrent (forkIO, threadDelay)
+import Utils (liftMaybe)
 
 minuteMcS :: Int
 minuteMcS = 6000000 * 2
@@ -49,13 +57,39 @@ allProcessedDecisions timeExpire = select $ distinct do
     (decision ^. DB.DecisionInitDate <=. val timeExpire)
   pure (initUser, decision, targetUser)
 
+getAllSubscribed chatId = select $ do
+  rating <- from $ table @DB.Rating
+  user <- from $ table @DB.User
+  where_ $ rating ^. DB.RatingChat ==. val chatId
+  where_ $ rating ^. DB.RatingUser ==. user ^. DB.UserId
+  where_ $ user ^. DB.UserSubscribed ==. val True
+  pure user
+
+makeDecision :: (Entity DB.User, Entity DB.Decision, Entity DB.User) -> App ()
+makeDecision
+  ( initUserEntity,
+    decisionEntity@Entity {entityKey = decisionKey, entityVal = decision},
+    targetUserEntity
+    ) = do
+    let chatId = DB.decisionChat $ decision
+    chat' <- DB.runDb $ getEntity chatId
+    case chat' of
+      Nothing -> pure ()
+      Just chat -> do
+        users <- DB.runDb $ getAllSubscribed $ entityKey chat
+        traverse_ handle users
+        where
+          handle userEntity@Entity {entityKey = userKey, entityVal = user} = do
+            sendMessage (DB.userTgId user) "~"
+            DB.runDb $ do upsertBy (DB.UniqueUserDecision userKey decisionKey) (DB.UserDecision userKey decisionKey False) []
+            pure ()
+
 makeDecisions :: App ()
 makeDecisions = do
   now <- liftIO getCurrentTime
   let timeExpire = addUTCTime (secondsToNominalDiffTime (-3600)) now
   pairs <- DB.runDb $ allProcessedDecisions timeExpire
-
-  pure ()
+  traverse_ makeDecision pairs
 
 startSheduler :: App ()
 startSheduler = void $

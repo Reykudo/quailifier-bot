@@ -44,17 +44,17 @@ share
     mkMigrate "migrateAll"
   ]
   [persistLowerCase|
-    User json
+    User 
         tgId Int64
         subscribed Bool
         UniqueUserTgId tgId
         deriving Show Eq 
-    Chat json
+    Chat 
         tgId Int64
 
         UniqueChatTgId tgId
         deriving Show Eq 
-    Rating json
+    Rating 
         count Int
         user UserId
         chat ChatId
@@ -62,12 +62,18 @@ share
         UniqueRating user chat
         deriving Show Eq 
 
-    Decision json
+    Decision 
         initUser UserId
         initDate UTCTime
         chat ChatId
         targetUser UserId
         status DecisionStatus
+        deriving Show Eq 
+    UserDecision
+        user UserId
+        decision DecisionId
+        resolution Bool nullable
+        UniqueUserDecision user decision
         deriving Show Eq 
     |]
 

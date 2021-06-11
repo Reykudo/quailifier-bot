@@ -12,6 +12,7 @@
 
 module Config where
 
+import Control.Applicative (Alternative)
 import Control.Concurrent (ThreadId, forkIO)
 import Control.Exception.Safe (MonadCatch, MonadThrow, catch, catchIO, throw, throwIO, try)
 import Control.Monad (liftM, void, (<=<))
@@ -84,7 +85,6 @@ instance MonadHTTP App where
     case v of
       Left (e :: HS.HttpException) -> throwError e
       Right r -> pure r
-
 
 newtype GlobalCaches = GlobalCaches {getMyCommandsCache :: Cache () (HS.Response PostGetMyCommandsResponse)}
 

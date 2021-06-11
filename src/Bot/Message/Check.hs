@@ -26,14 +26,13 @@ import Network.HTTP.Client.Internal (HttpException, Response (Response, response
 import TgBotAPI.Common (MonadHTTP, runWithConfiguration)
 import TgBotAPI.Operations.PostGetMyCommands (PostGetMyCommandsResponse (PostGetMyCommandsResponse200), PostGetMyCommandsResponseBody200 (PostGetMyCommandsResponseBody200), postGetMyCommands, result)
 import TgBotAPI.Types.BotCommand (BotCommand (BotCommand), command)
-import TgBotAPI.Types.Chat (id)
+import TgBotAPI.Types.Chat (Chat (..), id)
 import TgBotAPI.Types.Message (Message (Message), chat, entities, from, text)
 import TgBotAPI.Types.MessageEntity (MessageEntity (MessageEntity), Type (TypeEnumBotCommand), type')
 import TgBotAPI.Types.User (User (User, id))
 
-
-isCommand :: (MonadIO m, MonadReader Config m, MonadError HttpException m) => Message -> m (Maybe MyBotCommand)
-isCommand message = do
+getCommand :: (MonadIO m, MonadReader Config m, MonadError HttpException m) => Message -> m (Maybe MyBotCommand)
+getCommand message = do
   Config {configToken} <- ask
   mc <- getMethodConfiguration
   --   case  msg
@@ -42,23 +41,21 @@ isCommand message = do
     Just entities' <- pure entities
     guard $ any (\case MessageEntity {type' = TypeEnumBotCommand} -> True; _ -> False) entities'
     -- fromTime <- liftIO getCurrentTime
-    Response {responseBody = PostGetMyCommandsResponse200 PostGetMyCommandsResponseBody200 {result = botCommands}} <-
+    Response
+      { responseBody = PostGetMyCommandsResponse200 PostGetMyCommandsResponseBody200 {result = botCommands}
+      } <-
       lift $ runMethodWithCache getMyCommandsCache () $ const postGetMyCommands
 
     Just BotCommand {command} <- pure $ find (\case BotCommand {command} -> isPrefixOf ("/" <> command) text) botCommands
     liftIO $ print command
     pure $ getMyBotCommand command
 
--- isDirectMessage :: (MonadIO m) => m Bool
-isDirectMessage :: Monad f => Message -> f Bool
-isDirectMessage message = do
-  (fromMaybe False <$>) $
-    runMaybeT $ do
-      let chatId = TgBotAPI.Types.Chat.id $ chat message
-      User {id = userId} <- MaybeT . pure $ from message
-      pure $ chatId == userId
+data MessageType = IsChatMsg | IsDirectMsg deriving (Eq)
 
-isChatMessage :: Applicative f => Message -> f Bool
-isChatMessage message = do
-  let chatId = TgBotAPI.Types.Chat.id $ chat message
-  pure $ chatId < 0
+-- isDirectMessage :: (MonadIO m) => m Bool
+-- getMessageType :: Monad f => Message -> f MessageType
+getMessageType :: Monad m => Message -> m (Maybe MessageType)
+getMessageType message = runMaybeT $ do
+  let Chat {id = chatId} = chat message
+  User {id = userId} <- MaybeT . pure $ from message
+  MaybeT $ pure $ if chatId < 0 then Just IsChatMsg else (if chatId == userId then Just IsDirectMsg else Nothing)

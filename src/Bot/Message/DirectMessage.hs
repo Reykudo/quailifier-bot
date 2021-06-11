@@ -51,7 +51,8 @@ import Data.String (IsString)
 import Data.Text (Text, intercalate)
 import qualified Data.Text as T
 import Database.Esqueleto.Experimental
-  ( (<=.),
+  ( Entity,
+    (<=.),
     (=.),
     (==.),
     (^.),
@@ -68,39 +69,8 @@ import TgBotAPI.Types.Message (Message (Message), from, messageId, text)
 import TgBotAPI.Types.User (User (User, id))
 import UnliftIO (MonadUnliftIO)
 import UnliftIO.Async (mapConcurrently)
+import Utils (liftMaybe)
 
-handleDirectMessage :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
-handleDirectMessage = do
-  cfg@Config {configToken} <- asks config
-  Just User {id = userTgIdV} <- asks $ from . message
-
-  user' <- runDbInMsgEnv $ S.selectFirst [DB.UserTgId P.==. userTgIdV] []
-  Just userEntity@S.Entity {entityVal} <- pure user'
-  -- Msg {} <- asks message
-  Just txt <- asks $ text . message
-  reply userEntity
-
-  liftIO $ print $ show entityVal
-  pure ()
-
--- handleDirectMessage :: (MessageHandlerReader m, MonadLogger m, MonadIO m) => MaybeT m ()
--- handleDirectMessage = do
---   -- a <-
---   v <- runMaybeT handleDirectMessage'
-
---   -- ExceptT $ pure a
---   case v of
---     Right r -> pure r
---     Left e -> do
---       logErrorN $ T.pack e
---       fail e
-
--- reply :: (MonadLogger m, MonadReader Config m, MonadIO m) => ChatId -> DMCommand -> m ()
--- reply :: Entity DB.User -> DMCommand -> m ()
-
--- reply :: MonadIO m => Entity DB.User -> DMCommand -> ReaderT Config m ()
--- reply :: (MonadIO m, PersistQueryRead backend, PersistRecordBackend record backend) => Entity DB.User -> p -> ReaderT Config m ()
--- reply :: MonadReader Config m => Entity DB.User -> p -> m ()2
 selectChatMatchedWith ::
   ( MonadIO m,
     S.BackendCompatible S.SqlBackend backend,
@@ -124,20 +94,23 @@ setSubscribed userEntity isSubscribe = runDbInMsgEnv $ S.update \user -> do
   S.set user [DB.UserSubscribed =. S.val isSubscribe]
   S.where_ $ user ^. DB.UserId ==. S.val (S.entityKey userEntity)
 
-reply :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => S.Entity DB.User -> MessageEnvT m ()
-reply userEntity = do
-  configToken <- asks $ configToken . config
-  Message {messageId, text = Just txt} <- asks message
-  Just command <- asks command
-  case command of
-    Subscribe -> do
-      setSubscribed userEntity True
-      void $ replyBack "Subscribed!"
-    Unsubscribe -> do
-      setSubscribed userEntity False
-      void $ replyBack "Unsubscribed."
-    Start -> void $ replyBack "Hello"
-    _ -> throwError NotMatched
+getUserEntitiy :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m (Entity DB.User)
+getUserEntitiy = do
+  Just User {id = userTgIdV} <- asks $ from . message
+  user' <- runDbInMsgEnv $ S.selectFirst [DB.UserTgId P.==. userTgIdV] []
+  liftMaybe user'
+
+handleSubscribe :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
+handleSubscribe = do
+  userEntity <- getUserEntitiy
+  setSubscribed userEntity True
+  void $ replyBack "Subscribed!"
+
+handleUnsubscribe :: (Monad m, MonadIO m, MonadUnliftIO (MessageEnvT m)) => MessageEnvT m ()
+handleUnsubscribe = do
+  userEntity <- getUserEntitiy
+  setSubscribed userEntity False
+  void $ replyBack "Unsubscribed."
 
 -- -- reportException :: (MonadLogger m, MonadReader Config m, MonadIO m, MonadError BotException m) => Text -> BotException -> m ()
 -- reportException :: (MonadLogger m, MessageHandlerReader m, MonadIO m) => BotException -> BotExceptT m ()
